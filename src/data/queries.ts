@@ -15,7 +15,7 @@ export async function findOrClaimProfile(userId: string, email: string): Promise
   const client = requireClient()
 
   const { data: existing, error: existingError } = await client
-    .from('profiles')
+    .from('buster_profiles')
     .select('*')
     .eq('auth_user_id', userId)
     .maybeSingle()
@@ -24,7 +24,7 @@ export async function findOrClaimProfile(userId: string, email: string): Promise
   if (existing) return existing as Profile
 
   const { data: claimed, error: claimError } = await client
-    .from('profiles')
+    .from('buster_profiles')
     .update({ auth_user_id: userId, status: 'active' })
     .eq('email', email)
     .is('auth_user_id', null)
@@ -38,7 +38,7 @@ export async function findOrClaimProfile(userId: string, email: string): Promise
 export async function listWorkers(): Promise<Profile[]> {
   const client = requireClient()
   const { data, error } = await client
-    .from('profiles')
+    .from('buster_profiles')
     .select('*')
     .eq('role', 'worker')
     .order('created_at', { ascending: true })
@@ -50,7 +50,7 @@ export async function listWorkers(): Promise<Profile[]> {
 export async function addWorker(input: { fullName: string; email: string; ownerSharePercent: number }): Promise<Profile> {
   const client = requireClient()
   const { data, error } = await client
-    .from('profiles')
+    .from('buster_profiles')
     .insert({
       full_name: input.fullName,
       email: input.email,
@@ -67,14 +67,14 @@ export async function addWorker(input: { fullName: string; email: string; ownerS
 
 export async function setWorkerStatus(profileId: string, status: ProfileStatus): Promise<void> {
   const client = requireClient()
-  const { error } = await client.from('profiles').update({ status }).eq('id', profileId)
+  const { error } = await client.from('buster_profiles').update({ status }).eq('id', profileId)
   if (error) throw error
 }
 
 export async function listSubmissionsForWorker(workerId: string): Promise<Submission[]> {
   const client = requireClient()
   const { data, error } = await client
-    .from('submissions')
+    .from('buster_submissions')
     .select('*')
     .eq('worker_id', workerId)
     .order('week_start', { ascending: false })
@@ -86,7 +86,7 @@ export async function listSubmissionsForWorker(workerId: string): Promise<Submis
 export async function listAllSubmissions(): Promise<Submission[]> {
   const client = requireClient()
   const { data, error } = await client
-    .from('submissions')
+    .from('buster_submissions')
     .select('*')
     .order('week_start', { ascending: false })
 
@@ -104,7 +104,7 @@ export async function submitTimesheet(input: {
 }): Promise<Submission> {
   const client = requireClient()
   const { data, error } = await client
-    .from('submissions')
+    .from('buster_submissions')
     .insert({
       worker_id: input.workerId,
       week_start: input.weekStart,
@@ -122,6 +122,6 @@ export async function submitTimesheet(input: {
 
 export async function markDealtWith(submissionId: string): Promise<void> {
   const client = requireClient()
-  const { error } = await client.from('submissions').update({ dealt_with: true }).eq('id', submissionId)
+  const { error } = await client.from('buster_submissions').update({ dealt_with: true }).eq('id', submissionId)
   if (error) throw error
 }

@@ -351,7 +351,9 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                     >
                       <strong>{worker.full_name}</strong>
                       <p>Total submitted: {formatCurrency(workerTotal)}</p>
-                      <p>{workerPending} pending submission{workerPending === 1 ? '' : 's'}</p>
+                      <p className={workerPending > 0 ? 'text-danger' : undefined}>
+                        {workerPending} pending submission{workerPending === 1 ? '' : 's'}
+                      </p>
                     </article>
                   )
                 })}

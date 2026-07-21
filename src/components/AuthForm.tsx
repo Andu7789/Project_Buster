@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../lib/authContext'
 
+type Mode = 'signin' | 'signup' | 'forgot'
+
 export function AuthForm({
   portalLabel,
   portalHint,
@@ -12,8 +14,8 @@ export function AuthForm({
   otherPortalPath: string
   otherPortalPrompt: string
 }) {
-  const { signIn, signUp } = useAuth()
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const { signIn, signUp, requestPasswordReset } = useAuth()
+  const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -25,6 +27,17 @@ export function AuthForm({
     setError(null)
     setInfo(null)
     setSubmitting(true)
+
+    if (mode === 'forgot') {
+      const { error: resetError } = await requestPasswordReset(email)
+      setSubmitting(false)
+      if (resetError) {
+        setError(resetError)
+        return
+      }
+      setInfo('Check your email for a password reset link.')
+      return
+    }
 
     const action = mode === 'signin' ? signIn : signUp
     const { error: authError } = await action(email, password)
@@ -41,8 +54,8 @@ export function AuthForm({
     }
   }
 
-  function toggleMode() {
-    setMode((current) => (current === 'signin' ? 'signup' : 'signin'))
+  function switchMode(next: Mode) {
+    setMode(next)
     setError(null)
     setInfo(null)
   }
@@ -52,7 +65,11 @@ export function AuthForm({
       <div className="brand-block">
         <div className="logo-mark">PS</div>
         <h2>{portalLabel}</h2>
-        <p>{mode === 'signin' ? portalHint : 'Create your login using the email your employer added.'}</p>
+        <p>
+          {mode === 'signin' && portalHint}
+          {mode === 'signup' && 'Create your login using the email your employer added.'}
+          {mode === 'forgot' && "Enter your email and we'll send you a reset link."}
+        </p>
       </div>
 
       <form className="stack" onSubmit={handleSubmit}>
@@ -67,29 +84,48 @@ export function AuthForm({
             placeholder="you@example.com"
           />
         </label>
-        <label>
-          Password
-          <input
-            type="password"
-            required
-            minLength={6}
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters"
-          />
-        </label>
+        {mode !== 'forgot' && (
+          <label>
+            Password
+            <input
+              type="password"
+              required
+              minLength={6}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="At least 6 characters"
+            />
+          </label>
+        )}
         <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          {submitting
+            ? 'Please wait…'
+            : mode === 'signin'
+              ? 'Sign in'
+              : mode === 'signup'
+                ? 'Create account'
+                : 'Send reset link'}
         </button>
         {error && <p className="message message-error">{error}</p>}
         {info && <p className="message message-info">{info}</p>}
       </form>
 
       <div className="auth-switch">
-        <button type="button" className="link-btn" onClick={toggleMode}>
-          {mode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}
-        </button>
+        {mode === 'signin' && (
+          <button type="button" className="link-btn" onClick={() => switchMode('forgot')}>
+            Forgot password?
+          </button>
+        )}
+        {mode === 'forgot' ? (
+          <button type="button" className="link-btn" onClick={() => switchMode('signin')}>
+            Back to sign in
+          </button>
+        ) : (
+          <button type="button" className="link-btn" onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}>
+            {mode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+          </button>
+        )}
         <a className="link-btn" href={otherPortalPath}>
           {otherPortalPrompt}
         </a>

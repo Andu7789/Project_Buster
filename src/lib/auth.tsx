@@ -87,6 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!error) setRecoveryMode(false)
       return { error: error?.message ?? null }
     },
+    async requestPasswordReset(email) {
+      if (!supabase) return { error: 'Supabase is not configured.' }
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      })
+      return { error: error?.message ?? null }
+    },
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

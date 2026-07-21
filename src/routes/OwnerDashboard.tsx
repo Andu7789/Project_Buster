@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../lib/authContext'
-import { addWorker, listAllSubmissions, listWorkers, markDealtWith, setWorkerStatus } from '../data/queries'
+import { addWorker, listAllSubmissions, listWorkers, markDealtWith, setWorkerStatus, updateWorkerShare } from '../data/queries'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
 import type { Profile, ProfileStatus, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
@@ -27,6 +27,10 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [addMessage, setAddMessage] = useState<string | null>(null)
+
+  const [editingShareId, setEditingShareId] = useState<string | null>(null)
+  const [shareDraft, setShareDraft] = useState('')
+  const [shareError, setShareError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -101,15 +105,46 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     setAdding(true)
     try {
       const created = await addWorker({ fullName: name, email, ownerSharePercent: share })
-      setWorkers((previous) => [...previous, created])
+      setWorkers((previous) => {
+        const index = previous.findIndex((worker) => worker.id === created.id)
+        if (index === -1) return [...previous, created]
+        const next = [...previous]
+        next[index] = created
+        return next
+      })
       setNewWorkerName('')
       setNewWorkerEmail('')
       setNewWorkerShare('20')
-      setAddMessage(`${created.full_name} added. They can sign up at the worker portal using ${created.email}.`)
+      setAddMessage(
+        created.status === 'active'
+          ? `${created.full_name} restored - they can sign back in with their existing login.`
+          : `${created.full_name} added. They can sign up at the worker portal using ${created.email}.`,
+      )
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Could not add worker.')
     } finally {
       setAdding(false)
+    }
+  }
+
+  function startEditShare(worker: Profile) {
+    setEditingShareId(worker.id)
+    setShareDraft(String(worker.owner_share_percent))
+    setShareError(null)
+  }
+
+  async function handleSaveShare(workerId: string) {
+    const value = Number(shareDraft)
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      setShareError('Enter a number between 0 and 100.')
+      return
+    }
+    try {
+      await updateWorkerShare(workerId, value)
+      setWorkers((previous) => previous.map((worker) => (worker.id === workerId ? { ...worker, owner_share_percent: value } : worker)))
+      setEditingShareId(null)
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : 'Could not update share.')
     }
   }
 
@@ -229,7 +264,31 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                     <tr key={worker.id}>
                       <td>{worker.full_name}</td>
                       <td>{worker.email}</td>
-                      <td>{worker.owner_share_percent}%</td>
+                      <td>
+                        {editingShareId === worker.id ? (
+                          <div className="share-edit">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              className="share-edit-input"
+                              value={shareDraft}
+                              onChange={(event) => setShareDraft(event.target.value)}
+                              autoFocus
+                            />
+                            <button type="button" className="link-btn" onClick={() => handleSaveShare(worker.id)}>
+                              Save
+                            </button>
+                            <button type="button" className="link-btn" onClick={() => setEditingShareId(null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" className="share-value" onClick={() => startEditShare(worker)}>
+                            {worker.owner_share_percent}%
+                          </button>
+                        )}
+                      </td>
                       <td>
                         <ProfileStatusBadge status={worker.status} />
                       </td>
@@ -263,6 +322,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               </table>
             </div>
             {rosterError && <p className="message message-error">{rosterError}</p>}
+            {shareError && <p className="message message-error">{shareError}</p>}
           </section>
 
           <section className="panel">
@@ -381,6 +441,13 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               ))}
             </tbody>
           </table>
+
+          {selectedSubmission.notes && (
+            <div className="submission-notes">
+              <p className="label">Note from worker</p>
+              <p>{selectedSubmission.notes}</p>
+            </div>
+          )}
 
           <button
             type="button"

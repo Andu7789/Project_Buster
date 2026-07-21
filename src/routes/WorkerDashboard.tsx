@@ -17,6 +17,7 @@ function parseAmount(raw: string): number | null {
 export function WorkerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
   const [entries, setEntries] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState('')
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -89,9 +90,11 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         dayAmounts,
         amount: total,
         ownerSharePercent: profile.owner_share_percent,
+        notes: notes.trim() || undefined,
       })
       setSubmissions((previous) => [created, ...previous])
       setEntries({})
+      setNotes('')
       setMessage('Weekly submission sent to your employer.')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not submit your timesheet.')
@@ -139,6 +142,16 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
               <strong>Current week total</strong>
               <p className="summary-figure">{formatCurrency(liveTotal)}</p>
             </div>
+
+            <label>
+              Note (optional)
+              <textarea
+                rows={2}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Anything your employer should know about this week"
+              />
+            </label>
 
             <button type="submit" className="btn-primary" disabled={submitting}>
               {submitting ? 'Submitting…' : 'Submit timesheet'}
@@ -234,6 +247,13 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
               ))}
             </tbody>
           </table>
+
+          {selectedSubmission.notes && (
+            <div className="submission-notes">
+              <p className="label">Your note</p>
+              <p>{selectedSubmission.notes}</p>
+            </div>
+          )}
         </Modal>
       )}
     </div>

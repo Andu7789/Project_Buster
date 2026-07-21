@@ -43,13 +43,49 @@ export async function listWorkers(): Promise<Profile[]> {
   return (data ?? []) as Profile[]
 }
 
+/**
+ * Adds a worker. If this email was previously added and then removed, this
+ * restores that row instead of failing on the unique email constraint - if
+ * they'd already signed up before being removed, they go straight back to
+ * active (same login); otherwise they're reset to pending for a fresh signup.
+ */
 export async function addWorker(input: { fullName: string; email: string; ownerSharePercent: number }): Promise<Profile> {
   const client = requireClient()
+  const email = input.email.trim().toLowerCase()
+
+  const { data: existing, error: lookupError } = await client
+    .from('buster_profiles')
+    .select('*')
+    .ilike('email', email)
+    .maybeSingle()
+
+  if (lookupError) throw lookupError
+
+  if (existing) {
+    if (existing.status !== 'removed') {
+      throw new Error(`${existing.full_name} (${email}) is already on your team.`)
+    }
+
+    const { data, error } = await client
+      .from('buster_profiles')
+      .update({
+        full_name: input.fullName,
+        owner_share_percent: input.ownerSharePercent,
+        status: existing.auth_user_id ? 'active' : 'pending',
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return data as Profile
+  }
+
   const { data, error } = await client
     .from('buster_profiles')
     .insert({
       full_name: input.fullName,
-      email: input.email,
+      email,
       role: 'worker',
       owner_share_percent: input.ownerSharePercent,
       status: 'pending',
@@ -64,6 +100,12 @@ export async function addWorker(input: { fullName: string; email: string; ownerS
 export async function setWorkerStatus(profileId: string, status: ProfileStatus): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_profiles').update({ status }).eq('id', profileId)
+  if (error) throw error
+}
+
+export async function updateWorkerShare(profileId: string, ownerSharePercent: number): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_profiles').update({ owner_share_percent: ownerSharePercent }).eq('id', profileId)
   if (error) throw error
 }
 
@@ -97,6 +139,7 @@ export async function submitTimesheet(input: {
   dayAmounts: Record<string, number>
   amount: number
   ownerSharePercent: number
+  notes?: string
 }): Promise<Submission> {
   const client = requireClient()
   const { data, error } = await client
@@ -108,6 +151,7 @@ export async function submitTimesheet(input: {
       day_amounts: input.dayAmounts,
       amount: input.amount,
       owner_share_percent: input.ownerSharePercent,
+      notes: input.notes || null,
     })
     .select('*')
     .single()

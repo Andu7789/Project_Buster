@@ -1,6 +1,7 @@
 .app-shell {
   min-height: 100vh;
   padding: 32px;
+  padding-top: calc(var(--header-height) + 32px);
   max-width: 1080px;
   margin: 0 auto;
   display: flex;
@@ -14,21 +15,32 @@
   justify-content: center;
 }
 
+.app-shell-center.app-shell {
+  padding-top: 32px;
+}
+
 /* Header / nav */
 
 .portal-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-sticky);
+}
+
+.portal-header-inner {
+  height: var(--header-height);
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 24px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
 }
 
 .portal-brand {
@@ -42,10 +54,17 @@
   font-size: 1rem;
 }
 
-.portal-label {
-  display: block;
-  font-size: 0.85rem;
-  color: var(--ink-muted);
+.portal-badge {
+  display: inline-flex;
+  margin-top: 2px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .portal-header-right {
@@ -436,6 +455,44 @@ a:focus-visible {
   gap: 8px;
 }
 
+.share-value {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.share-value:hover {
+  background: var(--surface-tint);
+  color: var(--accent-strong);
+}
+
+.share-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-edit-input {
+  width: 64px;
+  padding: 4px 8px;
+}
+
+.submission-notes {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.submission-notes p:last-child {
+  margin: 0;
+}
+
 /* Tables */
 
 .table-header {
@@ -609,12 +666,15 @@ a:focus-visible {
 @media (max-width: 720px) {
   .app-shell {
     padding: 16px;
+    padding-top: calc(var(--header-height) + 16px);
   }
 
-  .portal-header {
-    position: static;
-    flex-direction: column;
-    align-items: flex-start;
+  .app-shell-center.app-shell {
+    padding-top: 16px;
+  }
+
+  .portal-header-inner {
+    padding: 0 16px;
   }
 
   .add-worker-form {

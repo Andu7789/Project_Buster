@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const found = await findOrClaimProfile(nextSession.user.id, nextSession.user.email ?? '')
+      const found = await findOrClaimProfile(nextSession.user.id)
       setProfile(found)
       setProfileError(found ? null : 'No account is set up for this email yet. Ask your employer to add you first.')
     } catch (err) {

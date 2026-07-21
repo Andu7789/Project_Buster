@@ -9,9 +9,11 @@ function requireClient() {
 /**
  * Looks up the profile already linked to this auth user. If none exists yet,
  * tries to claim a pending profile row that was pre-created (by an owner, or
- * by the one-time SQL seed) for this email address.
+ * by the one-time SQL seed) for this email address, via the buster_claim_profile()
+ * RPC (a security-definer function - see supabase/schema.sql for why this
+ * isn't a plain client-side update gated by an RLS policy).
  */
-export async function findOrClaimProfile(userId: string, email: string): Promise<Profile | null> {
+export async function findOrClaimProfile(userId: string): Promise<Profile | null> {
   const client = requireClient()
 
   const { data: existing, error: existingError } = await client
@@ -23,13 +25,7 @@ export async function findOrClaimProfile(userId: string, email: string): Promise
   if (existingError) throw existingError
   if (existing) return existing as Profile
 
-  const { data: claimed, error: claimError } = await client
-    .from('buster_profiles')
-    .update({ auth_user_id: userId, status: 'active' })
-    .ilike('email', email.trim())
-    .is('auth_user_id', null)
-    .select('*')
-    .maybeSingle()
+  const { data: claimed, error: claimError } = await client.rpc('buster_claim_profile')
 
   if (claimError) throw claimError
   return (claimed as Profile) ?? null

@@ -47,18 +47,40 @@ as $$
   );
 $$;
 
--- Security-definer helper that reads the caller's email straight from
--- auth.users via auth.uid(), instead of trusting the JWT's `email` claim -
--- some projects customize token claims (e.g. via an Access Token Hook),
--- which can silently break policies that read auth.jwt() ->> 'email'.
-create or replace function buster_current_email()
-returns text
-language sql
+-- Claiming a pending profile on first sign-in is done through this
+-- security-definer function rather than a client-side UPDATE gated by an
+-- RLS policy. It runs with elevated privileges and only trusts auth.uid()
+-- (sourced from the JWT's `sub` claim, always present) - it never depends
+-- on the JWT's `email` claim, which some projects reshape via an Access
+-- Token Hook and which silently broke the RLS-policy version of this.
+create or replace function buster_claim_profile()
+returns buster_profiles
+language plpgsql
 security definer
-stable
 as $$
-  select email from auth.users where id = auth.uid();
+declare
+  claimed buster_profiles;
+  caller_email text;
+begin
+  select email into caller_email from auth.users where id = auth.uid();
+  if caller_email is null then
+    return null;
+  end if;
+
+  update buster_profiles
+  set auth_user_id = auth.uid(), status = 'active'
+  where lower(email) = lower(caller_email) and auth_user_id is null
+  returning * into claimed;
+
+  if not found then
+    return null;
+  end if;
+
+  return claimed;
+end;
 $$;
+
+grant execute on function buster_claim_profile() to authenticated;
 
 alter table buster_profiles enable row level security;
 alter table buster_submissions enable row level security;
@@ -68,10 +90,10 @@ drop policy if exists "self read" on buster_profiles;
 create policy "self read" on buster_profiles for select
   using (auth_user_id = auth.uid() or buster_is_owner());
 
+-- Claiming now happens exclusively through buster_claim_profile() above,
+-- which bypasses RLS internally (security definer) - no client-side UPDATE
+-- policy is needed or wanted for the pending -> claimed transition.
 drop policy if exists "claim pending row on signup" on buster_profiles;
-create policy "claim pending row on signup" on buster_profiles for update
-  using (auth_user_id is null and lower(email) = lower(buster_current_email()))
-  with check (auth_user_id = auth.uid());
 
 drop policy if exists "owner manages all" on buster_profiles;
 create policy "owner manages all" on buster_profiles for all

@@ -27,7 +27,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   position: sticky;
-  top: 16px;
+  top: 0;
   z-index: var(--z-sticky);
 }
 

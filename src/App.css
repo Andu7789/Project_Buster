@@ -375,6 +375,10 @@ a:focus-visible {
   color: var(--ink);
 }
 
+.stat-value-danger {
+  color: var(--danger);
+}
+
 .stat-hint {
   font-size: 0.8rem;
   color: var(--ink-muted);

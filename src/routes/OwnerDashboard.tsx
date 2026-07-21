@@ -184,7 +184,12 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
         <>
           <section className="stat-grid">
             <StatCard label="Active workers" value={String(activeWorkers)} hint={`${pendingInvites} pending invite${pendingInvites === 1 ? '' : 's'}`} />
-            <StatCard label="Pending submissions" value={String(pendingSubmissions)} hint="awaiting invoice" />
+            <StatCard
+              label="Pending submissions"
+              value={String(pendingSubmissions)}
+              hint="awaiting invoice"
+              tone={pendingSubmissions > 0 ? 'danger' : 'default'}
+            />
             <StatCard label="Paid out this month" value={formatCurrency(totalThisMonth)} />
             <StatCard label="Team size" value={String(workers.length)} hint="all-time" />
           </section>

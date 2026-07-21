@@ -6,7 +6,7 @@ import type { Profile, ProfileStatus, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { StatCard } from '../components/StatCard'
 import { ProfileStatusBadge, SubmissionStatusBadge } from '../components/StatusBadge'
-import { Modal } from '../components/Modal'
+import { SubmissionInvoiceModal } from '../components/SubmissionInvoiceModal'
 import { WeekTrendChart } from '../components/WeekTrendChart'
 
 export function OwnerDashboard({ profile }: { profile: Profile }) {
@@ -165,17 +165,11 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     if (confirmed) handleStatusChange(worker.id, 'removed')
   }
 
-  async function handleMarkDealt(submissionId: string) {
-    setRosterError(null)
-    try {
-      await markDealtWith(submissionId)
-      setSubmissions((previous) =>
-        previous.map((submission) => (submission.id === submissionId ? { ...submission, dealt_with: true } : submission)),
-      )
-      setSelectedSubmissionId(null)
-    } catch (err) {
-      setRosterError(err instanceof Error ? err.message : 'Could not update this submission.')
-    }
+  async function handleSendInvoice(submissionId: string) {
+    await markDealtWith(submissionId)
+    setSubmissions((previous) =>
+      previous.map((submission) => (submission.id === submissionId ? { ...submission, dealt_with: true } : submission)),
+    )
   }
 
   return (
@@ -362,7 +356,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               <div className="stack">
                 <div className="table-header">
                   <h3>{selectedWorker.full_name}</h3>
-                  <p>Click a row to see daily amounts and mark the invoice as created.</p>
+                  <p>Click a row to see daily amounts and create an invoice.</p>
                 </div>
                 <div className="table-wrapper">
                   <table className="submission-table">
@@ -403,61 +397,14 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
         </>
       )}
 
-      {selectedSubmission && (
-        <Modal title="Weekly detail" onClose={() => setSelectedSubmissionId(null)}>
-          <p className="modal-subtitle">
-            {selectedWorker?.full_name} — {formatWeekRange(selectedSubmission.week_start, selectedSubmission.week_end)}
-          </p>
-          <div className="detail-summary">
-            <div>
-              <p className="label">Total submitted</p>
-              <strong>{formatCurrency(selectedSubmission.amount)}</strong>
-            </div>
-            <div>
-              <p className="label">Owner share</p>
-              <strong>{formatCurrency(selectedSubmission.amount * (selectedSubmission.owner_share_percent / 100))}</strong>
-            </div>
-            <div>
-              <p className="label">Status</p>
-              <strong>
-                <SubmissionStatusBadge dealtWith={selectedSubmission.dealt_with} />
-              </strong>
-            </div>
-          </div>
-
-          <table className="detail-table">
-            <thead>
-              <tr>
-                <th>Day</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(selectedSubmission.day_amounts).map(([day, amount]) => (
-                <tr key={day}>
-                  <td>{day}</td>
-                  <td>{formatCurrency(amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {selectedSubmission.notes && (
-            <div className="submission-notes">
-              <p className="label">Note from worker</p>
-              <p>{selectedSubmission.notes}</p>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => handleMarkDealt(selectedSubmission.id)}
-            disabled={selectedSubmission.dealt_with}
-          >
-            {selectedSubmission.dealt_with ? 'Invoice already created' : 'Mark invoice created'}
-          </button>
-        </Modal>
+      {selectedSubmission && selectedWorker && (
+        <SubmissionInvoiceModal
+          submission={selectedSubmission}
+          workerName={selectedWorker.full_name}
+          workerEmail={selectedWorker.email}
+          onClose={() => setSelectedSubmissionId(null)}
+          onSendInvoice={handleSendInvoice}
+        />
       )}
     </div>
   )

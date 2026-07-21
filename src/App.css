@@ -493,6 +493,65 @@ a:focus-visible {
   margin: 0;
 }
 
+/* Invoice modal */
+
+.invoice-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.invoice-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.invoice-line-deduct {
+  color: var(--ink-muted);
+}
+
+.invoice-line-total {
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--accent-ink);
+}
+
+.invoice-sent {
+  text-align: center;
+  padding: 12px 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.invoice-sent strong {
+  font-size: 1.9rem;
+  color: var(--accent-ink);
+}
+
+.invoice-sent p {
+  color: var(--ink-muted);
+  margin: 0;
+  max-width: 42ch;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 /* Tables */
 
 .table-header {

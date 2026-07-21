@@ -1,17 +1,31 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './App.css'
 import { AuthProvider } from './lib/auth'
+import { useAuth } from './lib/authContext'
 import { WorkerPortal } from './routes/WorkerPortal'
 import { OwnerPortal } from './routes/OwnerPortal'
+import { ResetPasswordScreen } from './components/ResetPasswordScreen'
+
+function AppRoutes() {
+  const { recoveryMode } = useAuth()
+
+  if (recoveryMode) {
+    return <ResetPasswordScreen />
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<WorkerPortal />} />
+      <Route path="/owner" element={<OwnerPortal />} />
+    </Routes>
+  )
+}
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<WorkerPortal />} />
-          <Route path="/owner" element={<OwnerPortal />} />
-        </Routes>
+        <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
   )

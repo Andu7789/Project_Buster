@@ -10,6 +10,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   async function loadProfile(nextSession: Session | null) {
     if (!nextSession) {
@@ -40,8 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setLoading(false)
     })
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (cancelled) return
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true)
+      if (event === 'SIGNED_OUT') setRecoveryMode(false)
       setSession(nextSession)
       setLoading(true)
       await loadProfile(nextSession)
@@ -60,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     profileError,
+    recoveryMode,
     async signIn(email, password) {
       if (!supabase) return { error: 'Supabase is not configured.' }
       const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -76,6 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async refreshProfile() {
       await loadProfile(session)
+    },
+    async completePasswordReset(password) {
+      if (!supabase) return { error: 'Supabase is not configured.' }
+      const { error } = await supabase.auth.updateUser({ password })
+      if (!error) setRecoveryMode(false)
+      return { error: error?.message ?? null }
     },
   }
 

@@ -8,10 +8,12 @@ export interface AuthContextValue {
   session: Session | null
   profile: Profile | null
   profileError: string | null
+  recoveryMode: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  completePasswordReset: (password: string) => Promise<{ error: string | null }>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

@@ -57,7 +57,7 @@ create policy "self read" on buster_profiles for select
 
 drop policy if exists "claim pending row on signup" on buster_profiles;
 create policy "claim pending row on signup" on buster_profiles for update
-  using (auth_user_id is null and email = auth.jwt() ->> 'email')
+  using (auth_user_id is null and lower(email) = lower(auth.jwt() ->> 'email'))
   with check (auth_user_id = auth.uid());
 
 drop policy if exists "owner manages all" on buster_profiles;
@@ -95,4 +95,5 @@ create policy "owner updates any" on buster_submissions for update
 -- need seeding here - add them from the owner dashboard once you're in.
 -- ---------------------------------------------------------------------
 insert into buster_profiles (email, full_name, role, status)
-values ('andrew.britain@gmail.com', 'Andrew Britain', 'owner', 'pending');
+values ('andrew.britain@gmail.com', 'Andrew Britain', 'owner', 'pending')
+on conflict (email) do nothing;

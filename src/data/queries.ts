@@ -26,7 +26,7 @@ export async function findOrClaimProfile(userId: string, email: string): Promise
   const { data: claimed, error: claimError } = await client
     .from('buster_profiles')
     .update({ auth_user_id: userId, status: 'active' })
-    .eq('email', email)
+    .ilike('email', email.trim())
     .is('auth_user_id', null)
     .select('*')
     .maybeSingle()

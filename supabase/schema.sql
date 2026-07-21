@@ -47,6 +47,19 @@ as $$
   );
 $$;
 
+-- Security-definer helper that reads the caller's email straight from
+-- auth.users via auth.uid(), instead of trusting the JWT's `email` claim -
+-- some projects customize token claims (e.g. via an Access Token Hook),
+-- which can silently break policies that read auth.jwt() ->> 'email'.
+create or replace function buster_current_email()
+returns text
+language sql
+security definer
+stable
+as $$
+  select email from auth.users where id = auth.uid();
+$$;
+
 alter table buster_profiles enable row level security;
 alter table buster_submissions enable row level security;
 
@@ -57,7 +70,7 @@ create policy "self read" on buster_profiles for select
 
 drop policy if exists "claim pending row on signup" on buster_profiles;
 create policy "claim pending row on signup" on buster_profiles for update
-  using (auth_user_id is null and lower(email) = lower(auth.jwt() ->> 'email'))
+  using (auth_user_id is null and lower(email) = lower(buster_current_email()))
   with check (auth_user_id = auth.uid());
 
 drop policy if exists "owner manages all" on buster_profiles;

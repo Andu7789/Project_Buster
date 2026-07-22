@@ -28,7 +28,7 @@ export function OwnerPortal() {
   }
 
   return (
-    <AuthGate expectedRole="owner" loginPath="/owner" otherPortalPath="/" otherPortalLabel="worker">
+    <AuthGate expectedRole="owner" loginPath="/owner">
       {(profile) => <OwnerDashboard profile={profile} />}
     </AuthGate>
   )

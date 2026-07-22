@@ -11,17 +11,21 @@ function CenteredPanel({ children }: { children: ReactNode }) {
   )
 }
 
+// Where each role's portal actually lives - used to send a signed-in user to
+// their own portal, whichever of the (now three) roles they turn out to be.
+const PORTALS_BY_ROLE: Record<UserRole, { path: string; label: string }> = {
+  worker: { path: '/', label: 'worker' },
+  owner: { path: '/owner', label: 'owner' },
+  learner: { path: '/learn', label: 'learner' },
+}
+
 export function AuthGate({
   expectedRole,
   loginPath,
-  otherPortalPath,
-  otherPortalLabel,
   children,
 }: {
   expectedRole: UserRole
   loginPath: string
-  otherPortalPath: string
-  otherPortalLabel: string
   children: (profile: Profile) => ReactNode
 }) {
   const { configured, loading, session, profile, profileError, signOut } = useAuth()
@@ -60,12 +64,13 @@ export function AuthGate({
   }
 
   if (profile.role !== expectedRole) {
+    const target = PORTALS_BY_ROLE[profile.role]
     return (
       <CenteredPanel>
         <h2>Wrong portal</h2>
-        <p>This login belongs to the {otherPortalLabel} portal.</p>
-        <a className="btn-primary" href={otherPortalPath}>
-          Go to {otherPortalLabel} portal
+        <p>This login belongs to the {target.label} portal.</p>
+        <a className="btn-primary" href={target.path}>
+          Go to {target.label} portal
         </a>
         <button type="button" className="btn-ghost" onClick={signOut}>
           Sign out

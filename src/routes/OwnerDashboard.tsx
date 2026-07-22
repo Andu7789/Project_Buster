@@ -3,6 +3,7 @@ import { useAuth } from '../lib/authContext'
 import {
   addLearner,
   addWorker,
+  deleteProfile,
   listAllSubmissions,
   listAllTrainingProgress,
   listLearners,
@@ -197,6 +198,20 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     if (confirmed) handleStatusChange(worker.id, 'removed')
   }
 
+  async function handleDeleteWorker(worker: Profile) {
+    const confirmed = window.confirm(
+      `Permanently delete ${worker.full_name}? This also deletes their submission and timesheet history, and their email becomes free to add again. This can't be undone.`,
+    )
+    if (!confirmed) return
+    setRosterError(null)
+    try {
+      await deleteProfile(worker.id)
+      setWorkers((previous) => previous.filter((entry) => entry.id !== worker.id))
+    } catch (err) {
+      setRosterError(err instanceof Error ? err.message : 'Could not delete this worker.')
+    }
+  }
+
   async function handleAddLearner(event: FormEvent) {
     event.preventDefault()
     setAddLearnerError(null)
@@ -247,6 +262,20 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   function handleRemoveLearner(learner: Profile) {
     const confirmed = window.confirm(`Remove ${learner.full_name}? They'll be signed out and can't log in again.`)
     if (confirmed) handleLearnerStatusChange(learner.id, 'removed')
+  }
+
+  async function handleDeleteLearner(learner: Profile) {
+    const confirmed = window.confirm(
+      `Permanently delete ${learner.full_name}? This also deletes their training progress, and their email becomes free to add again. This can't be undone.`,
+    )
+    if (!confirmed) return
+    setLearnerRosterError(null)
+    try {
+      await deleteProfile(learner.id)
+      setLearners((previous) => previous.filter((entry) => entry.id !== learner.id))
+    } catch (err) {
+      setLearnerRosterError(err instanceof Error ? err.message : 'Could not delete this learner.')
+    }
   }
 
   async function handleSendInvoice(submissionId: string) {
@@ -391,6 +420,11 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                             Remove
                           </button>
                         )}
+                        {worker.status === 'removed' && (
+                          <button type="button" className="btn-danger" onClick={() => handleDeleteWorker(worker)}>
+                            Delete permanently
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -469,6 +503,11 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                         {learner.status !== 'removed' && (
                           <button type="button" className="btn-danger" onClick={() => handleRemoveLearner(learner)}>
                             Remove
+                          </button>
+                        )}
+                        {learner.status === 'removed' && (
+                          <button type="button" className="btn-danger" onClick={() => handleDeleteLearner(learner)}>
+                            Delete permanently
                           </button>
                         )}
                       </td>

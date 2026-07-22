@@ -165,6 +165,19 @@ export async function setProfileStatus(profileId: string, status: ProfileStatus)
   if (error) throw error
 }
 
+/**
+ * Permanently deletes an already-removed profile (and its dependent rows)
+ * via the buster_delete_profile() RPC - see supabase/schema.sql for why this
+ * can't be a plain client-side delete under RLS. Distinct from
+ * setProfileStatus(id, 'removed'), which is the reversible, history-keeping
+ * default.
+ */
+export async function deleteProfile(profileId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.rpc('buster_delete_profile', { target_id: profileId })
+  if (error) throw error
+}
+
 export async function updateWorkerShare(profileId: string, ownerSharePercent: number): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_profiles').update({ owner_share_percent: ownerSharePercent }).eq('id', profileId)

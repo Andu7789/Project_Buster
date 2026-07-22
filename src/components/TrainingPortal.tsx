@@ -22,6 +22,7 @@ import {
   allComplete,
   firstIncompleteIndex,
   toCompletedMap,
+  type DragDropExercise,
   type HotspotArea,
 } from '../lib/trainingContent'
 import './TrainingPortal.css'
@@ -165,6 +166,102 @@ function Confetti() {
 }
 
 // ---------------------------------------------------------------------------
+// Snippet drag-and-drop — practice picking the right canned response and
+// dragging it into a mock reply box, mirroring the real workflow. Supports
+// native HTML5 drag-and-drop and a click-to-select/click-to-place fallback
+// so it works on touch devices and via keyboard. Keyed by the parent on
+// mod.id + stepIdx so its local state resets cleanly between steps.
+// ---------------------------------------------------------------------------
+function SnippetDragExercise({
+  exercise,
+  solved,
+  onSolve,
+}: {
+  exercise: DragDropExercise
+  solved: boolean
+  onSolve: () => void
+}) {
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  function place(id: string) {
+    setFeedback(id === exercise.correctOptionId ? 'correct' : 'incorrect')
+    if (id === exercise.correctOptionId) onSolve()
+    setPickedId(null)
+  }
+
+  if (solved) {
+    const placed = exercise.options.find((o) => o.id === exercise.correctOptionId)
+    return (
+      <div className="tp-drag-exercise tp-drag-solved">
+        <div className="tp-drag-prompt">{exercise.prompt}</div>
+        <div className="tp-drag-target tp-drag-target-filled">{placed?.label}</div>
+        <div className="tp-result-right">
+          <CheckCircle2 size={14} /> {exercise.successText}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="tp-drag-exercise">
+      <div className="tp-drag-prompt">{exercise.prompt}</div>
+      <div className="tp-drag-chips">
+        {exercise.options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData('text/plain', option.id)
+              setPickedId(option.id)
+            }}
+            onDragEnd={() => setPickedId(null)}
+            onClick={() => setPickedId((current) => (current === option.id ? null : option.id))}
+            className="tp-drag-chip"
+            aria-pressed={pickedId === option.id}
+            style={{
+              border: pickedId === option.id ? '1px solid #F2A93B' : '1px solid #2E3A5C',
+              background: pickedId === option.id ? '#232E52' : '#171F38',
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="tp-drag-target"
+        onDragOver={(event) => {
+          event.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(event) => {
+          event.preventDefault()
+          setDragOver(false)
+          const id = event.dataTransfer.getData('text/plain')
+          if (id) place(id)
+        }}
+        onClick={() => {
+          if (pickedId) place(pickedId)
+        }}
+        style={{
+          border: dragOver ? '2px dashed #F2A93B' : '2px dashed #2E3A5C',
+          background: dragOver ? 'rgba(242,169,59,0.08)' : '#141B32',
+        }}
+      >
+        {pickedId
+          ? `Drop here to place it in the ${exercise.targetLabel.toLowerCase()}`
+          : `Drag or select a snippet, then place it in the ${exercise.targetLabel.toLowerCase()}`}
+      </button>
+      {feedback === 'incorrect' && <div className="tp-result-wrong">{exercise.incorrectText}</div>}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Help widget — generic, content-agnostic FAQ. Safe to ship even with
 // placeholder training content since none of the answers reference specifics.
 // ---------------------------------------------------------------------------
@@ -225,6 +322,7 @@ export function TrainingPortal({
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({})
   const [quizResult, setQuizResult] = useState<boolean | null>(null)
   const [search, setSearch] = useState('')
+  const [dragSolved, setDragSolved] = useState<Record<string, boolean>>({})
 
   const [notes, setNotes] = useState<Record<string, string>>(() => {
     try {
@@ -282,6 +380,7 @@ export function TrainingPortal({
   }, [phase, stepIdx, moduleIdx])
 
   function goStep(dir: number) {
+    if (dir > 0 && dragBlocked) return
     const next = stepIdx + dir
     if (next < 0) return
     if (next >= mod.steps.length) {
@@ -344,9 +443,11 @@ export function TrainingPortal({
     setPhase('walkthrough')
     setQuizAnswers({})
     setQuizResult(null)
+    setDragSolved({})
   }
 
   const noteKey = `${mod.id}:${stepIdx}`
+  const dragBlocked = Boolean(step.dragDrop) && !dragSolved[noteKey]
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
@@ -478,6 +579,15 @@ export function TrainingPortal({
                   </div>
                   <div className="tp-step-text">{step.text}</div>
 
+                  {step.dragDrop && (
+                    <SnippetDragExercise
+                      key={noteKey}
+                      exercise={step.dragDrop}
+                      solved={dragSolved[noteKey] ?? false}
+                      onSolve={() => setDragSolved((prev) => ({ ...prev, [noteKey]: true }))}
+                    />
+                  )}
+
                   <label className="tp-notes-label">
                     Your notes (private, saved on this device)
                     <textarea
@@ -499,7 +609,13 @@ export function TrainingPortal({
                     >
                       <ChevronLeft size={14} /> Back
                     </button>
-                    <button type="button" onClick={() => goStep(1)} className="tp-btn-primary">
+                    <button
+                      type="button"
+                      onClick={() => goStep(1)}
+                      disabled={dragBlocked}
+                      className="tp-btn-primary"
+                      style={{ opacity: dragBlocked ? 0.5 : 1, cursor: dragBlocked ? 'default' : 'pointer' }}
+                    >
                       {stepIdx === mod.steps.length - 1 ? 'Take the check' : 'Next'} <ChevronRight size={14} />
                     </button>
                   </div>

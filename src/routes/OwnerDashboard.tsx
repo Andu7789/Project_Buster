@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../lib/authContext'
-import { addWorker, listAllSubmissions, listWorkers, markDealtWith, setWorkerStatus, updateWorkerShare } from '../data/queries'
+import {
+  addLearner,
+  addWorker,
+  listAllSubmissions,
+  listLearners,
+  listWorkers,
+  markDealtWith,
+  setProfileStatus,
+  updateWorkerShare,
+} from '../data/queries'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
 import type { Profile, ProfileStatus, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
@@ -13,6 +22,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
 
   const [workers, setWorkers] = useState<Profile[]>([])
+  const [learners, setLearners] = useState<Profile[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -32,13 +42,21 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [shareDraft, setShareDraft] = useState('')
   const [shareError, setShareError] = useState<string | null>(null)
 
+  const [newLearnerName, setNewLearnerName] = useState('')
+  const [newLearnerEmail, setNewLearnerEmail] = useState('')
+  const [addingLearner, setAddingLearner] = useState(false)
+  const [addLearnerError, setAddLearnerError] = useState<string | null>(null)
+  const [addLearnerMessage, setAddLearnerMessage] = useState<string | null>(null)
+  const [learnerRosterError, setLearnerRosterError] = useState<string | null>(null)
+
   useEffect(() => {
     let cancelled = false
-    Promise.all([listWorkers(), listAllSubmissions()])
-      .then(([workerData, submissionData]) => {
+    Promise.all([listWorkers(), listAllSubmissions(), listLearners()])
+      .then(([workerData, submissionData, learnerData]) => {
         if (cancelled) return
         setWorkers(workerData)
         setSubmissions(submissionData)
+        setLearners(learnerData)
         setSelectedWorkerId((current) => current ?? workerData[0]?.id ?? null)
       })
       .catch((err) => {
@@ -151,7 +169,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   async function handleStatusChange(workerId: string, status: ProfileStatus) {
     setRosterError(null)
     try {
-      await setWorkerStatus(workerId, status)
+      await setProfileStatus(workerId, status)
       setWorkers((previous) => previous.map((worker) => (worker.id === workerId ? { ...worker, status } : worker)))
     } catch (err) {
       setRosterError(err instanceof Error ? err.message : 'Could not update this worker.')
@@ -163,6 +181,58 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       `Remove ${worker.full_name}? Their timesheet history is kept, but they'll be signed out and can't log in again.`,
     )
     if (confirmed) handleStatusChange(worker.id, 'removed')
+  }
+
+  async function handleAddLearner(event: FormEvent) {
+    event.preventDefault()
+    setAddLearnerError(null)
+    setAddLearnerMessage(null)
+
+    const name = newLearnerName.trim()
+    const email = newLearnerEmail.trim().toLowerCase()
+
+    if (!name || !email) {
+      setAddLearnerError('Enter a name and email.')
+      return
+    }
+
+    setAddingLearner(true)
+    try {
+      const created = await addLearner({ fullName: name, email })
+      setLearners((previous) => {
+        const index = previous.findIndex((learner) => learner.id === created.id)
+        if (index === -1) return [...previous, created]
+        const next = [...previous]
+        next[index] = created
+        return next
+      })
+      setNewLearnerName('')
+      setNewLearnerEmail('')
+      setAddLearnerMessage(
+        created.status === 'active'
+          ? `${created.full_name} restored - they can sign back in with their existing login.`
+          : `${created.full_name} added. They can sign up at the learner portal using ${created.email}.`,
+      )
+    } catch (err) {
+      setAddLearnerError(err instanceof Error ? err.message : 'Could not add learner.')
+    } finally {
+      setAddingLearner(false)
+    }
+  }
+
+  async function handleLearnerStatusChange(learnerId: string, status: ProfileStatus) {
+    setLearnerRosterError(null)
+    try {
+      await setProfileStatus(learnerId, status)
+      setLearners((previous) => previous.map((learner) => (learner.id === learnerId ? { ...learner, status } : learner)))
+    } catch (err) {
+      setLearnerRosterError(err instanceof Error ? err.message : 'Could not update this learner.')
+    }
+  }
+
+  function handleRemoveLearner(learner: Profile) {
+    const confirmed = window.confirm(`Remove ${learner.full_name}? They'll be signed out and can't log in again.`)
+    if (confirmed) handleLearnerStatusChange(learner.id, 'removed')
   }
 
   async function handleSendInvoice(submissionId: string) {
@@ -322,6 +392,85 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
             </div>
             {rosterError && <p className="message message-error">{rosterError}</p>}
             {shareError && <p className="message message-error">{shareError}</p>}
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Learners</h2>
+                <p>Give someone access to the training portal.</p>
+              </div>
+            </div>
+
+            <form className="add-worker-form" onSubmit={handleAddLearner}>
+              <label>
+                Full name
+                <input value={newLearnerName} onChange={(event) => setNewLearnerName(event.target.value)} placeholder="Jordan Lee" />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={newLearnerEmail}
+                  onChange={(event) => setNewLearnerEmail(event.target.value)}
+                  placeholder="jordan@example.com"
+                />
+              </label>
+              <button type="submit" className="btn-primary" disabled={addingLearner}>
+                {addingLearner ? 'Adding…' : 'Add learner'}
+              </button>
+            </form>
+            {addLearnerError && <p className="message message-error">{addLearnerError}</p>}
+            {addLearnerMessage && <p className="message message-info">{addLearnerMessage}</p>}
+
+            <div className="table-wrapper">
+              <table className="submission-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {learners.map((learner) => (
+                    <tr key={learner.id}>
+                      <td>{learner.full_name}</td>
+                      <td>{learner.email}</td>
+                      <td>
+                        <ProfileStatusBadge status={learner.status} />
+                      </td>
+                      <td className="roster-actions">
+                        {learner.status === 'active' && (
+                          <button type="button" className="btn-outline" onClick={() => handleLearnerStatusChange(learner.id, 'suspended')}>
+                            Suspend
+                          </button>
+                        )}
+                        {learner.status === 'suspended' && (
+                          <button type="button" className="btn-outline" onClick={() => handleLearnerStatusChange(learner.id, 'active')}>
+                            Reactivate
+                          </button>
+                        )}
+                        {learner.status !== 'removed' && (
+                          <button type="button" className="btn-danger" onClick={() => handleRemoveLearner(learner)}>
+                            Remove
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {learners.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="empty-row">
+                        No learners yet — add your first one above.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {learnerRosterError && <p className="message message-error">{learnerRosterError}</p>}
           </section>
 
           <section className="panel">

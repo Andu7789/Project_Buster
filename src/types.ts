@@ -1,4 +1,4 @@
-export type UserRole = 'worker' | 'owner'
+export type UserRole = 'worker' | 'owner' | 'learner'
 
 export type ProfileStatus = 'pending' | 'active' | 'suspended' | 'removed'
 

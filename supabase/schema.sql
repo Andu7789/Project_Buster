@@ -12,7 +12,7 @@ create table if not exists buster_profiles (
   auth_user_id uuid unique references auth.users(id),
   email text not null unique,
   full_name text not null,
-  role text not null check (role in ('worker', 'owner')),
+  role text not null check (role in ('worker', 'owner', 'learner')),
   owner_share_percent numeric not null default 20,
   status text not null default 'pending' check (status in ('pending', 'active', 'suspended', 'removed')),
   created_at timestamptz not null default now()

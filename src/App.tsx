@@ -4,6 +4,7 @@ import { AuthProvider } from './lib/auth'
 import { useAuth } from './lib/authContext'
 import { WorkerPortal } from './routes/WorkerPortal'
 import { OwnerPortal } from './routes/OwnerPortal'
+import { LearnerPortal } from './routes/LearnerPortal'
 import { ResetPasswordScreen } from './components/ResetPasswordScreen'
 
 function AppRoutes() {
@@ -17,6 +18,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<WorkerPortal />} />
       <Route path="/owner" element={<OwnerPortal />} />
+      <Route path="/learn" element={<LearnerPortal />} />
     </Routes>
   )
 }

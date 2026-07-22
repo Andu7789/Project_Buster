@@ -237,8 +237,11 @@ export function TrainingPortal({
 
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const mod = MODULES[moduleIdx]
-  const step = mod.steps[stepIdx]
+  // Falls back to the first module/step rather than crashing if moduleIdx or
+  // stepIdx ever end up out of range (e.g. stale progress referencing a
+  // module that no longer exists in the current content model).
+  const mod = MODULES[moduleIdx] ?? MODULES[0]
+  const step = mod.steps[stepIdx] ?? mod.steps[0]
   const totalDone = Object.keys(completed).length
   const progressPct = Math.round((totalDone / MODULES.length) * 100)
   const remainingMinutes = MODULES.filter((m) => !completed[m.id]).reduce((sum, m) => sum + m.estimatedMinutes, 0)

@@ -12,7 +12,7 @@ create table if not exists buster_profiles (
   auth_user_id uuid unique references auth.users(id),
   email text not null unique,
   full_name text not null,
-  role text not null check (role in ('worker', 'owner')),
+  role text not null check (role in ('worker', 'owner', 'learner')),
   owner_share_percent numeric not null default 20,
   status text not null default 'pending' check (status in ('pending', 'active', 'suspended', 'removed')),
   created_at timestamptz not null default now()
@@ -30,6 +30,18 @@ create table if not exists buster_submissions (
   notes text,
   created_at timestamptz not null default now(),
   unique (worker_id, week_start)
+);
+
+-- Tracks which training modules a learner has passed the check for. module_id
+-- is a free-text slug from the client-side content model (e.g. "start"),
+-- deliberately not a foreign key - the training content lives in the app, not
+-- the database, so new/renamed modules never require a migration here.
+create table if not exists buster_training_progress (
+  id uuid primary key default gen_random_uuid(),
+  learner_id uuid not null references buster_profiles(id),
+  module_id text not null,
+  completed_at timestamptz not null default now(),
+  unique (learner_id, module_id)
 );
 
 -- Security-definer helper so RLS policies can check "is this caller an owner"
@@ -84,6 +96,7 @@ grant execute on function buster_claim_profile() to authenticated;
 
 alter table buster_profiles enable row level security;
 alter table buster_submissions enable row level security;
+alter table buster_training_progress enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -123,6 +136,29 @@ create policy "owner updates any" on buster_submissions for update
 
 -- Note: workers deliberately have no UPDATE/DELETE policy on buster_submissions -
 -- past timesheets are visible but not editable once submitted.
+
+-- buster_training_progress policies
+drop policy if exists "learner reads own, owner reads all" on buster_training_progress;
+create policy "learner reads own, owner reads all" on buster_training_progress for select
+  using (
+    learner_id in (select id from buster_profiles where auth_user_id = auth.uid())
+    or buster_is_owner()
+  );
+
+drop policy if exists "learner inserts own" on buster_training_progress;
+create policy "learner inserts own" on buster_training_progress for insert
+  with check (
+    learner_id in (select id from buster_profiles where auth_user_id = auth.uid())
+  );
+
+-- Learners can clear their own progress ("reset training") - owners are
+-- deliberately not granted delete here, only read, so a reset can't be done
+-- on someone else's behalf by mistake.
+drop policy if exists "learner deletes own" on buster_training_progress;
+create policy "learner deletes own" on buster_training_progress for delete
+  using (
+    learner_id in (select id from buster_profiles where auth_user_id = auth.uid())
+  );
 
 -- ---------------------------------------------------------------------
 -- One-time seed: replace the email/name below with your own and run this

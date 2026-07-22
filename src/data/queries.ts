@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { Profile, ProfileStatus, Submission } from '../types'
+import type { Profile, ProfileStatus, Submission, TrainingProgress } from '../types'
 
 function requireClient() {
   if (!supabase) throw new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
@@ -37,6 +37,18 @@ export async function listWorkers(): Promise<Profile[]> {
     .from('buster_profiles')
     .select('*')
     .eq('role', 'worker')
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as Profile[]
+}
+
+export async function listLearners(): Promise<Profile[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_profiles')
+    .select('*')
+    .eq('role', 'learner')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -97,7 +109,57 @@ export async function addWorker(input: { fullName: string; email: string; ownerS
   return data as Profile
 }
 
-export async function setWorkerStatus(profileId: string, status: ProfileStatus): Promise<void> {
+/**
+ * Adds a learner. Mirrors addWorker() - restores a previously removed row by
+ * email instead of failing on the unique constraint.
+ */
+export async function addLearner(input: { fullName: string; email: string }): Promise<Profile> {
+  const client = requireClient()
+  const email = input.email.trim().toLowerCase()
+
+  const { data: existing, error: lookupError } = await client
+    .from('buster_profiles')
+    .select('*')
+    .ilike('email', email)
+    .maybeSingle()
+
+  if (lookupError) throw lookupError
+
+  if (existing) {
+    if (existing.status !== 'removed') {
+      throw new Error(`${existing.full_name} (${email}) already has an account.`)
+    }
+
+    const { data, error } = await client
+      .from('buster_profiles')
+      .update({
+        full_name: input.fullName,
+        status: existing.auth_user_id ? 'active' : 'pending',
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return data as Profile
+  }
+
+  const { data, error } = await client
+    .from('buster_profiles')
+    .insert({
+      full_name: input.fullName,
+      email,
+      role: 'learner',
+      status: 'pending',
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Profile
+}
+
+export async function setProfileStatus(profileId: string, status: ProfileStatus): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_profiles').update({ status }).eq('id', profileId)
   if (error) throw error
@@ -163,5 +225,38 @@ export async function submitTimesheet(input: {
 export async function markDealtWith(submissionId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_submissions').update({ dealt_with: true }).eq('id', submissionId)
+  if (error) throw error
+}
+
+export async function listTrainingProgress(learnerId: string): Promise<TrainingProgress[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_training_progress')
+    .select('*')
+    .eq('learner_id', learnerId)
+
+  if (error) throw error
+  return (data ?? []) as TrainingProgress[]
+}
+
+/** Owner-side reporting: every learner's progress rows in one query. */
+export async function listAllTrainingProgress(): Promise<TrainingProgress[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_training_progress').select('*')
+  if (error) throw error
+  return (data ?? []) as TrainingProgress[]
+}
+
+export async function markModuleComplete(learnerId: string, moduleId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client
+    .from('buster_training_progress')
+    .upsert({ learner_id: learnerId, module_id: moduleId }, { onConflict: 'learner_id,module_id' })
+  if (error) throw error
+}
+
+export async function resetTrainingProgress(learnerId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_training_progress').delete().eq('learner_id', learnerId)
   if (error) throw error
 }

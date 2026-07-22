@@ -30,7 +30,7 @@ export function WorkerPortal() {
   }
 
   return (
-    <AuthGate expectedRole="worker" loginPath="/" otherPortalPath="/owner" otherPortalLabel="owner">
+    <AuthGate expectedRole="worker" loginPath="/">
       {(profile) => <WorkerDashboard profile={profile} />}
     </AuthGate>
   )

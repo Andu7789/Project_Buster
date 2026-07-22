@@ -28,7 +28,7 @@ export function LearnerPortal() {
   }
 
   return (
-    <AuthGate expectedRole="learner" loginPath="/learn" otherPortalPath="/" otherPortalLabel="worker">
+    <AuthGate expectedRole="learner" loginPath="/learn">
       {(profile) => <LearnerDashboard profile={profile} />}
     </AuthGate>
   )

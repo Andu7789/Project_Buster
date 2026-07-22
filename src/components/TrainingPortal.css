@@ -313,6 +313,64 @@
   color: #d7ddf2;
 }
 
+.tp-drag-exercise {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #0e1426;
+  border: 1px solid #2e3a5c;
+}
+
+.tp-drag-prompt {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  color: #d7ddf2;
+}
+
+.tp-drag-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tp-drag-chip {
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: grab;
+  color: #d7ddf2;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.tp-drag-chip:active {
+  cursor: grabbing;
+}
+
+.tp-drag-target {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 12px;
+  border-radius: 8px;
+  color: #7c8ab8;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.tp-drag-target-filled {
+  border: 1px solid #4fd1c5;
+  background: #141b32;
+  color: #d7ddf2;
+  cursor: default;
+  font-size: 12px;
+}
+
 .tp-notes-label {
   display: block;
   margin-top: 14px;

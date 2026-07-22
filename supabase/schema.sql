@@ -98,6 +98,35 @@ $$;
 
 grant execute on function buster_claim_profile() to authenticated;
 
+-- Permanent delete, gated to owners and to profiles already soft-removed via
+-- "Remove" (status = 'removed') - the owner dashboard's regular Remove button
+-- only ever sets that status, keeping history by default. This is the
+-- explicit second step for actually clearing test/junk accounts out, and it
+-- has to be security-definer because owners have no RLS delete grant on
+-- buster_training_progress (only learners can delete their own rows) and
+-- because buster_submissions has no owner delete policy at all.
+create or replace function buster_delete_profile(target_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  if not buster_is_owner() then
+    raise exception 'Only an owner can delete a profile.';
+  end if;
+
+  if not exists (select 1 from buster_profiles where id = target_id and status = 'removed') then
+    raise exception 'Only a removed profile can be permanently deleted - remove it first.';
+  end if;
+
+  delete from buster_training_progress where learner_id = target_id;
+  delete from buster_submissions where worker_id = target_id;
+  delete from buster_profiles where id = target_id;
+end;
+$$;
+
+grant execute on function buster_delete_profile(uuid) to authenticated;
+
 alter table buster_profiles enable row level security;
 alter table buster_submissions enable row level security;
 alter table buster_training_progress enable row level security;

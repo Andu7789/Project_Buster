@@ -15,10 +15,28 @@ export interface HotspotArea {
   h: string
 }
 
+export interface DragOption {
+  id: string
+  label: string
+}
+
+// A practice exercise where the learner drags one of several pre-written
+// snippets into a mock drop target, mirroring the canned-response workflow
+// used on the real job. Optional on Step so most steps stay plain reading.
+export interface DragDropExercise {
+  prompt: string
+  targetLabel: string
+  options: DragOption[]
+  correctOptionId: string
+  successText: string
+  incorrectText: string
+}
+
 export interface Step {
   label: string
   hotspot: HotspotArea
   text: string
+  dragDrop?: DragDropExercise
 }
 
 export interface QuizQuestion {
@@ -112,6 +130,22 @@ export const MODULES: Module[] = [
         label: 'Snippets',
         hotspot: { top: '62%', left: '82%', w: '12%', h: '6%' },
         text: "Snippets insert pre-written answers for common questions. Type '/' in the reply box to search them without leaving the keyboard.",
+        dragDrop: {
+          prompt: 'This customer was charged twice for the same plan. Drag the snippet that best matches into the reply box.',
+          targetLabel: 'Reply box',
+          options: [
+            {
+              id: 'billing',
+              label: "Thanks for flagging this — I can see the duplicate charge and I'm processing a refund for the extra amount now.",
+            },
+            { id: 'password', label: "I've reset your password and sent a new sign-in link to your email." },
+            { id: 'cancel', label: 'Your subscription has been cancelled as requested.' },
+            { id: 'escalate', label: "Thanks for your patience — I've escalated this to our specialist team." },
+          ],
+          correctOptionId: 'billing',
+          successText: 'Nice pick — that directly addresses the duplicate charge without over-promising.',
+          incorrectText: 'Not quite — re-read the ticket above and think about what this customer actually needs.',
+        },
       },
       {
         label: 'Internal note',

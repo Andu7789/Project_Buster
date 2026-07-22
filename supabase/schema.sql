@@ -65,30 +65,34 @@ $$;
 -- (sourced from the JWT's `sub` claim, always present) - it never depends
 -- on the JWT's `email` claim, which some projects reshape via an Access
 -- Token Hook and which silently broke the RLS-policy version of this.
+--
+-- Returns SETOF (zero or one row) rather than a single buster_profiles
+-- value on purpose: a plpgsql function declared to return a bare composite
+-- type that does `return null` doesn't come back over PostgREST as JSON
+-- null - it comes back as a row with every column set to null, which the
+-- client then mistakes for a real (but broken) profile. Returning a set
+-- and using a bare `return;` for the not-found case gives a genuine
+-- zero-row result instead. drop first: Postgres won't let create-or-replace
+-- change a function's return type (scalar -> setof).
+drop function if exists buster_claim_profile();
 create or replace function buster_claim_profile()
-returns buster_profiles
+returns setof buster_profiles
 language plpgsql
 security definer
 as $$
 declare
-  claimed buster_profiles;
   caller_email text;
 begin
   select email into caller_email from auth.users where id = auth.uid();
   if caller_email is null then
-    return null;
+    return;
   end if;
 
-  update buster_profiles
-  set auth_user_id = auth.uid(), status = 'active'
-  where lower(email) = lower(caller_email) and auth_user_id is null
-  returning * into claimed;
-
-  if not found then
-    return null;
-  end if;
-
-  return claimed;
+  return query
+    update buster_profiles
+    set auth_user_id = auth.uid(), status = 'active'
+    where lower(email) = lower(caller_email) and auth_user_id is null
+    returning *;
 end;
 $$;
 

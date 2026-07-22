@@ -25,7 +25,7 @@ export async function findOrClaimProfile(userId: string): Promise<Profile | null
   if (existingError) throw existingError
   if (existing) return existing as Profile
 
-  const { data: claimed, error: claimError } = await client.rpc('buster_claim_profile')
+  const { data: claimed, error: claimError } = await client.rpc('buster_claim_profile').maybeSingle()
 
   if (claimError) throw claimError
   return (claimed as Profile) ?? null

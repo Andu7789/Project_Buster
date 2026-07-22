@@ -72,7 +72,9 @@ $$;
 -- null - it comes back as a row with every column set to null, which the
 -- client then mistakes for a real (but broken) profile. Returning a set
 -- and using a bare `return;` for the not-found case gives a genuine
--- zero-row result instead.
+-- zero-row result instead. drop first: Postgres won't let create-or-replace
+-- change a function's return type (scalar -> setof).
+drop function if exists buster_claim_profile();
 create or replace function buster_claim_profile()
 returns setof buster_profiles
 language plpgsql

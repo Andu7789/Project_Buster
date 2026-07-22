@@ -65,13 +65,24 @@ export function AuthGate({
 
   if (profile.role !== expectedRole) {
     const target = PORTALS_BY_ROLE[profile.role]
+    if (!target) {
+      // Shouldn't happen (the role column is constrained at the DB level),
+      // but degrade gracefully instead of crashing the whole app if it ever does.
+      console.error(`AuthGate: profile has unrecognized role "${String(profile.role)}"`)
+    }
     return (
       <CenteredPanel>
         <h2>Wrong portal</h2>
-        <p>This login belongs to the {target.label} portal.</p>
-        <a className="btn-primary" href={target.path}>
-          Go to {target.label} portal
-        </a>
+        {target ? (
+          <>
+            <p>This login belongs to the {target.label} portal.</p>
+            <a className="btn-primary" href={target.path}>
+              Go to {target.label} portal
+            </a>
+          </>
+        ) : (
+          <p>This account isn't set up for this portal. Contact your employer for help.</p>
+        )}
         <button type="button" className="btn-ghost" onClick={signOut}>
           Sign out
         </button>

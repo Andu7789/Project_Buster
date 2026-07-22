@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { Profile, ProfileStatus, Submission } from '../types'
+import type { Profile, ProfileStatus, Submission, TrainingProgress } from '../types'
 
 function requireClient() {
   if (!supabase) throw new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
@@ -225,5 +225,38 @@ export async function submitTimesheet(input: {
 export async function markDealtWith(submissionId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_submissions').update({ dealt_with: true }).eq('id', submissionId)
+  if (error) throw error
+}
+
+export async function listTrainingProgress(learnerId: string): Promise<TrainingProgress[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_training_progress')
+    .select('*')
+    .eq('learner_id', learnerId)
+
+  if (error) throw error
+  return (data ?? []) as TrainingProgress[]
+}
+
+/** Owner-side reporting: every learner's progress rows in one query. */
+export async function listAllTrainingProgress(): Promise<TrainingProgress[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_training_progress').select('*')
+  if (error) throw error
+  return (data ?? []) as TrainingProgress[]
+}
+
+export async function markModuleComplete(learnerId: string, moduleId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client
+    .from('buster_training_progress')
+    .upsert({ learner_id: learnerId, module_id: moduleId }, { onConflict: 'learner_id,module_id' })
+  if (error) throw error
+}
+
+export async function resetTrainingProgress(learnerId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_training_progress').delete().eq('learner_id', learnerId)
   if (error) throw error
 }

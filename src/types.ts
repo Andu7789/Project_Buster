@@ -13,6 +13,13 @@ export interface Profile {
   created_at: string
 }
 
+export interface TrainingProgress {
+  id: string
+  learner_id: string
+  module_id: string
+  completed_at: string
+}
+
 export interface Submission {
   id: string
   worker_id: string

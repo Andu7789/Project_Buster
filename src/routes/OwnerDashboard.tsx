@@ -4,6 +4,7 @@ import {
   addLearner,
   addWorker,
   listAllSubmissions,
+  listAllTrainingProgress,
   listLearners,
   listWorkers,
   markDealtWith,
@@ -11,12 +12,13 @@ import {
   updateWorkerShare,
 } from '../data/queries'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
-import type { Profile, ProfileStatus, Submission } from '../types'
+import type { Profile, ProfileStatus, Submission, TrainingProgress } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { StatCard } from '../components/StatCard'
 import { ProfileStatusBadge, SubmissionStatusBadge } from '../components/StatusBadge'
 import { SubmissionInvoiceModal } from '../components/SubmissionInvoiceModal'
 import { WeekTrendChart } from '../components/WeekTrendChart'
+import { TRAINING_MODULE_COUNT, TRAINING_MODULE_TITLES } from '../lib/trainingContent'
 
 export function OwnerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
@@ -24,6 +26,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [workers, setWorkers] = useState<Profile[]>([])
   const [learners, setLearners] = useState<Profile[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -51,12 +54,13 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([listWorkers(), listAllSubmissions(), listLearners()])
-      .then(([workerData, submissionData, learnerData]) => {
+    Promise.all([listWorkers(), listAllSubmissions(), listLearners(), listAllTrainingProgress()])
+      .then(([workerData, submissionData, learnerData, progressData]) => {
         if (cancelled) return
         setWorkers(workerData)
         setSubmissions(submissionData)
         setLearners(learnerData)
+        setTrainingProgress(progressData)
         setSelectedWorkerId((current) => current ?? workerData[0]?.id ?? null)
       })
       .catch((err) => {
@@ -101,6 +105,16 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const selectedWorker = workers.find((worker) => worker.id === selectedWorkerId) ?? null
   const selectedWorkerSubmissions = submissions.filter((submission) => submission.worker_id === selectedWorkerId)
   const selectedSubmission = submissions.find((submission) => submission.id === selectedSubmissionId) ?? null
+
+  const progressByLearner = useMemo(() => {
+    const map = new Map<string, TrainingProgress[]>()
+    for (const row of trainingProgress) {
+      const rows = map.get(row.learner_id) ?? []
+      rows.push(row)
+      map.set(row.learner_id, rows)
+    }
+    return map
+  }, [trainingProgress])
 
   async function handleAddWorker(event: FormEvent) {
     event.preventDefault()
@@ -471,6 +485,68 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               </table>
             </div>
             {learnerRosterError && <p className="message message-error">{learnerRosterError}</p>}
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Training progress</h2>
+                <p>How far each learner has gotten through the onboarding track.</p>
+              </div>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="submission-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Progress</th>
+                    <th>Modules completed</th>
+                    <th>Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {learners
+                    .filter((learner) => learner.status !== 'removed')
+                    .map((learner) => {
+                      const rows = progressByLearner.get(learner.id) ?? []
+                      const pct = Math.round((rows.length / TRAINING_MODULE_COUNT) * 100)
+                      const lastActivity = rows
+                        .map((row) => row.completed_at)
+                        .sort()
+                        .at(-1)
+                      return (
+                        <tr key={learner.id}>
+                          <td>{learner.full_name}</td>
+                          <td>
+                            <div className="progress-cell">
+                              <div className="progress-cell-track">
+                                <div className="progress-cell-fill" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span>{pct}%</span>
+                            </div>
+                          </td>
+                          <td>
+                            {rows.length === 0
+                              ? '—'
+                              : `${rows.length}/${TRAINING_MODULE_COUNT} — ${rows
+                                  .map((row) => TRAINING_MODULE_TITLES[row.module_id] ?? row.module_id)
+                                  .join(', ')}`}
+                          </td>
+                          <td>{lastActivity ? new Date(lastActivity).toLocaleDateString('en-GB') : 'Not started'}</td>
+                        </tr>
+                      )
+                    })}
+                  {learners.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="empty-row">
+                        No learners yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </section>
 
           <section className="panel">

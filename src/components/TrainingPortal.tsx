@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Circle,
@@ -13,190 +13,18 @@ import {
   Lock,
   Award,
   PlayCircle,
+  HelpCircle,
+  X,
 } from 'lucide-react'
+import {
+  MODULES,
+  TOTAL_MINUTES,
+  allComplete,
+  firstIncompleteIndex,
+  toCompletedMap,
+  type HotspotArea,
+} from '../lib/trainingContent'
 import './TrainingPortal.css'
-
-// ---------------------------------------------------------------------------
-// CONTENT MODEL
-// This is placeholder demo content standing in for the real training
-// material. Each module has a short guided walkthrough (hotspots over a mock
-// app frame) followed by a 2-question check. Swap MODULES and the MockApp
-// screens for the real product's screens/copy once they're ready.
-// ---------------------------------------------------------------------------
-
-interface HotspotArea {
-  top: string
-  left: string
-  w: string
-  h: string
-}
-
-interface Step {
-  label: string
-  hotspot: HotspotArea
-  text: string
-}
-
-interface QuizQuestion {
-  q: string
-  options: string[]
-  answer: number
-}
-
-interface Module {
-  id: string
-  title: string
-  blurb: string
-  steps: Step[]
-  quiz: QuizQuestion[]
-}
-
-const MODULES: Module[] = [
-  {
-    id: 'start',
-    title: 'Getting started',
-    blurb: 'Log in and get oriented on the dashboard.',
-    steps: [
-      {
-        label: 'The dashboard',
-        hotspot: { top: '8%', left: '4%', w: '20%', h: '10%' },
-        text: 'When you log in, you land here. The left rail is your home base for the rest of the shift — inbox, search, and settings all live here.',
-      },
-      {
-        label: 'Your queue',
-        hotspot: { top: '22%', left: '26%', w: '68%', h: '16%' },
-        text: 'This is your queue: every open conversation assigned to you, newest first. A filled dot means the customer is waiting on your reply.',
-      },
-      {
-        label: 'Status toggle',
-        hotspot: { top: '8%', left: '88%', w: '9%', h: '8%' },
-        text: 'Set yourself Available or Away here. Away removes you from new-ticket routing but keeps your existing queue visible.',
-      },
-    ],
-    quiz: [
-      {
-        q: 'A filled dot next to a ticket means:',
-        options: ['The customer is waiting on a reply', 'The ticket is closed', "It's a VIP customer"],
-        answer: 0,
-      },
-      {
-        q: "Setting yourself to 'Away' does what?",
-        options: ['Logs you out', 'Stops new tickets routing to you, keeps your current queue', 'Deletes your queue'],
-        answer: 1,
-      },
-    ],
-  },
-  {
-    id: 'find',
-    title: 'Finding a ticket',
-    blurb: 'Search and filter to pull up the right conversation fast.',
-    steps: [
-      {
-        label: 'Search bar',
-        hotspot: { top: '8%', left: '26%', w: '40%', h: '8%' },
-        text: 'Search by customer name, email, or ticket number. It also matches text inside messages, so a distinctive phrase works too.',
-      },
-      {
-        label: 'Filters',
-        hotspot: { top: '22%', left: '4%', w: '20%', h: '40%' },
-        text: "Narrow by status, priority, or tag. Combine filters — e.g. 'Open' + 'Billing' — to build a focused worklist.",
-      },
-    ],
-    quiz: [
-      {
-        q: 'Search matches on:',
-        options: ['Name and email only', 'Name, email, ticket number, and message text', 'Ticket number only'],
-        answer: 1,
-      },
-    ],
-  },
-  {
-    id: 'respond',
-    title: 'Responding to a customer',
-    blurb: 'Reply, use canned responses, and attach files.',
-    steps: [
-      {
-        label: 'Reply box',
-        hotspot: { top: '62%', left: '26%', w: '68%', h: '14%' },
-        text: 'Type your reply here. It saves as a draft automatically if you navigate away mid-sentence.',
-      },
-      {
-        label: 'Snippets',
-        hotspot: { top: '62%', left: '82%', w: '12%', h: '6%' },
-        text: "Snippets insert pre-written answers for common questions. Type '/' in the reply box to search them without leaving the keyboard.",
-      },
-      {
-        label: 'Internal note',
-        hotspot: { top: '48%', left: '26%', w: '68%', h: '10%' },
-        text: 'Internal notes are only visible to your team — use them to flag context for whoever picks up the ticket next. Customers never see these.',
-      },
-    ],
-    quiz: [
-      {
-        q: "Typing '/' in the reply box:",
-        options: ['Sends the message', 'Opens snippet search', 'Deletes the draft'],
-        answer: 1,
-      },
-      {
-        q: 'Internal notes are visible to:',
-        options: ['The customer and your team', 'Only your team', 'Only you'],
-        answer: 1,
-      },
-    ],
-  },
-  {
-    id: 'escalate',
-    title: 'Escalating an issue',
-    blurb: 'Know when and how to hand off a ticket.',
-    steps: [
-      {
-        label: 'Escalate button',
-        hotspot: { top: '8%', left: '82%', w: '13%', h: '8%' },
-        text: 'Escalate when an issue needs a specialist or manager — refunds over policy limits, legal threats, or repeated unresolved contact.',
-      },
-      {
-        label: 'Escalation reason',
-        hotspot: { top: '34%', left: '26%', w: '68%', h: '12%' },
-        text: 'Always add a one-line reason. It routes the ticket faster and saves the next person from re-reading the whole thread.',
-      },
-    ],
-    quiz: [
-      {
-        q: 'Which is a good reason to escalate?',
-        options: [
-          'The customer used a rude tone once',
-          "A refund request exceeds your policy limit",
-          "You're not sure which snippet to use",
-        ],
-        answer: 1,
-      },
-    ],
-  },
-  {
-    id: 'close',
-    title: 'Closing a ticket',
-    blurb: 'Wrap up and tag the outcome.',
-    steps: [
-      {
-        label: 'Resolution tag',
-        hotspot: { top: '78%', left: '26%', w: '30%', h: '8%' },
-        text: 'Tag the outcome (Resolved, No response needed, Duplicate) before closing — this is what your team\'s weekly reporting runs on.',
-      },
-      {
-        label: 'Close button',
-        hotspot: { top: '78%', left: '82%', w: '12%', h: '8%' },
-        text: 'Closing removes the ticket from your active queue. It can always be reopened if the customer replies again.',
-      },
-    ],
-    quiz: [
-      {
-        q: 'Why tag a resolution before closing?',
-        options: ["It's required by the reply box", 'It feeds team reporting', 'It notifies the customer'],
-        answer: 1,
-      },
-    ],
-  },
-]
 
 // ---------------------------------------------------------------------------
 // MOCK APP FRAME — a stand-in for the real product's screen.
@@ -290,22 +118,165 @@ function MockApp({ activeHotspot }: { activeHotspot: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
+// Confetti — a small no-dependency celebration burst shown on track completion.
+// Respects prefers-reduced-motion via the app-wide rule in index.css, which
+// clamps all animation-duration to ~0 for users who've asked for less motion.
+// ---------------------------------------------------------------------------
+
+// Deterministic 0-1 "randomness" from a seed, so generating the burst stays a
+// pure function of the piece index - no Math.random() during render, and no
+// effect needed just to smuggle non-determinism in after the fact.
+function pseudoRandom(seed: number): number {
+  const x = Math.sin(seed * 12.9898) * 43758.5453
+  return x - Math.floor(x)
+}
+
+function Confetti() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 36 }, (_, i) => ({
+        id: i,
+        left: pseudoRandom(i * 3 + 1) * 100,
+        delay: pseudoRandom(i * 7 + 2) * 0.5,
+        duration: 2.2 + pseudoRandom(i * 11 + 3) * 1.6,
+        color: ['#F2A93B', '#4FD1C5', '#E4826A', '#7C8AB8'][i % 4],
+        rotate: pseudoRandom(i * 13 + 5) * 360,
+      })),
+    [],
+  )
+
+  return (
+    <div className="tp-confetti" aria-hidden="true">
+      {pieces.map((p) => (
+        <span
+          key={p.id}
+          className="tp-confetti-piece"
+          style={{
+            left: `${p.left}%`,
+            background: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            transform: `rotate(${p.rotate}deg)`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Help widget — generic, content-agnostic FAQ. Safe to ship even with
+// placeholder training content since none of the answers reference specifics.
+// ---------------------------------------------------------------------------
+function HelpWidget() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="tp-help">
+      {open && (
+        <div className="tp-help-panel" role="dialog" aria-label="Training portal help">
+          <div className="tp-help-panel-head">
+            <strong>Need help?</strong>
+            <button type="button" className="tp-help-close" onClick={() => setOpen(false)} aria-label="Close help">
+              <X size={14} />
+            </button>
+          </div>
+          <dl className="tp-help-list">
+            <dt>How is my progress saved?</dt>
+            <dd>Automatically, the moment you pass a module's check — no need to click save.</dd>
+            <dt>What happens if I get a question wrong?</dt>
+            <dd>Review the highlighted screen and try again. There's no limit on attempts.</dd>
+            <dt>Can I revisit a finished module?</dt>
+            <dd>Yes — click any completed module in the sidebar to go back through it.</dd>
+            <dt>Who do I contact with questions?</dt>
+            <dd>Reach out to your manager.</dd>
+          </dl>
+        </div>
+      )}
+      <button type="button" className="tp-help-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <HelpCircle size={16} /> Help
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // MAIN PORTAL
 // ---------------------------------------------------------------------------
 type Phase = 'walkthrough' | 'quiz' | 'done'
 
-export function TrainingPortal() {
-  const [moduleIdx, setModuleIdx] = useState(0)
+export function TrainingPortal({
+  learnerName,
+  completedModuleIds,
+  onModuleComplete,
+  onResetProgress,
+  notesStorageKey,
+}: {
+  learnerName: string
+  completedModuleIds: string[]
+  onModuleComplete: (moduleId: string) => void
+  onResetProgress: () => void
+  notesStorageKey: string
+}) {
+  const [completed, setCompleted] = useState<Record<string, boolean>>(() => toCompletedMap(completedModuleIds))
+  const [moduleIdx, setModuleIdx] = useState(() => firstIncompleteIndex(toCompletedMap(completedModuleIds)))
+  const [phase, setPhase] = useState<Phase>(() => (allComplete(toCompletedMap(completedModuleIds)) ? 'done' : 'walkthrough'))
   const [stepIdx, setStepIdx] = useState(0)
-  const [phase, setPhase] = useState<Phase>('walkthrough')
-  const [completed, setCompleted] = useState<Record<string, boolean>>({})
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({})
   const [quizResult, setQuizResult] = useState<boolean | null>(null)
+  const [search, setSearch] = useState('')
+
+  const [notes, setNotes] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(notesStorageKey)
+      return raw ? (JSON.parse(raw) as Record<string, string>) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  const panelRef = useRef<HTMLDivElement>(null)
 
   const mod = MODULES[moduleIdx]
   const step = mod.steps[stepIdx]
   const totalDone = Object.keys(completed).length
   const progressPct = Math.round((totalDone / MODULES.length) * 100)
+  const remainingMinutes = MODULES.filter((m) => !completed[m.id]).reduce((sum, m) => sum + m.estimatedMinutes, 0)
+
+  const filteredModules = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return MODULES
+    return MODULES.filter((m) => `${m.title} ${m.blurb}`.toLowerCase().includes(q))
+  }, [search])
+
+  const announcement =
+    phase === 'walkthrough'
+      ? `Step ${stepIdx + 1} of ${mod.steps.length}: ${step.label}`
+      : phase === 'quiz'
+        ? `Quick check for ${mod.title}`
+        : 'Track complete'
+
+  // Move focus into the panel whenever its content changes underneath it, so
+  // keyboard/screen-reader users land on the new step or quiz without having
+  // to re-navigate from the top of the page.
+  useEffect(() => {
+    panelRef.current?.focus()
+  }, [phase, stepIdx, moduleIdx])
+
+  useEffect(() => {
+    if (phase !== 'walkthrough') return
+
+    function handleKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement
+      if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return
+      if (event.key === 'ArrowRight') goStep(1)
+      if (event.key === 'ArrowLeft') goStep(-1)
+    }
+
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, stepIdx, moduleIdx])
 
   function goStep(dir: number) {
     const next = stepIdx + dir
@@ -328,6 +299,7 @@ export function TrainingPortal() {
     setQuizResult(correct)
     if (correct) {
       setCompleted((p) => ({ ...p, [mod.id]: true }))
+      onModuleComplete(mod.id)
     }
   }
 
@@ -347,8 +319,39 @@ export function TrainingPortal() {
     }
   }
 
+  function updateNote(key: string, value: string) {
+    setNotes((prev) => {
+      const next = { ...prev, [key]: value }
+      try {
+        localStorage.setItem(notesStorageKey, JSON.stringify(next))
+      } catch {
+        // localStorage can throw in private browsing / at quota - notes just won't persist.
+      }
+      return next
+    })
+  }
+
+  function handleReset() {
+    const confirmed = window.confirm('Reset all your training progress? Completed modules will be locked again.')
+    if (!confirmed) return
+    onResetProgress()
+    setCompleted({})
+    setModuleIdx(0)
+    setStepIdx(0)
+    setPhase('walkthrough')
+    setQuizAnswers({})
+    setQuizResult(null)
+  }
+
+  const noteKey = `${mod.id}:${stepIdx}`
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
   return (
     <div className="tp-root">
+      <div aria-live="polite" className="tp-sr-only">
+        {announcement}
+      </div>
+
       <div className="tp-sidebar">
         <div className="tp-logo-row">
           <div className="tp-logo-mark">
@@ -366,10 +369,25 @@ export function TrainingPortal() {
           <div className="tp-progress-track">
             <div className="tp-progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
+          <div className="tp-time-remaining">
+            {remainingMinutes > 0 ? `~${remainingMinutes} of ${TOTAL_MINUTES} min left` : 'All modules complete'}
+          </div>
+        </div>
+
+        <div className="tp-search">
+          <Search size={12} />
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search modules…"
+            aria-label="Search training modules"
+          />
         </div>
 
         <div className="tp-module-list">
-          {MODULES.map((m, i) => {
+          {filteredModules.map((m) => {
+            const i = MODULES.findIndex((mm) => mm.id === m.id)
             const isActive = i === moduleIdx && phase !== 'done'
             const isDone = completed[m.id]
             const isLocked = i > 0 && !completed[MODULES[i - 1].id]
@@ -399,21 +417,46 @@ export function TrainingPortal() {
                   <div className="tp-module-title" style={{ color: isActive ? '#E8ECF6' : '#B7C0E0' }}>
                     {m.title}
                   </div>
-                  <div className="tp-module-blurb">{m.blurb}</div>
+                  <div className="tp-module-blurb">
+                    {m.blurb} · ~{m.estimatedMinutes} min
+                  </div>
                 </span>
               </button>
             )
           })}
+          {filteredModules.length === 0 && <div className="tp-search-empty">No modules match "{search}".</div>}
         </div>
+
+        <button type="button" className="tp-reset-link" onClick={handleReset}>
+          Reset my progress
+        </button>
       </div>
 
       <div className="tp-main">
         <div className="tp-main-inner">
           {phase === 'done' ? (
             <div className="tp-done">
+              <Confetti />
               <Award size={40} color="#F2A93B" />
               <div className="tp-done-title">Track complete</div>
               <div className="tp-done-sub">You've finished every module. You're ready to take live tickets.</div>
+
+              <div className="tp-certificate">
+                <div className="tp-certificate-eyebrow">CERTIFICATE OF COMPLETION</div>
+                <div className="tp-certificate-name">{learnerName}</div>
+                <div className="tp-certificate-body">has successfully completed the</div>
+                <div className="tp-certificate-track">Training Academy onboarding track</div>
+                <div className="tp-certificate-date">{today}</div>
+              </div>
+
+              <div className="tp-done-actions">
+                <button type="button" className="tp-btn-primary" onClick={() => window.print()}>
+                  Print certificate
+                </button>
+                <button type="button" className="tp-btn-review" onClick={handleReset}>
+                  Reset progress
+                </button>
+              </div>
             </div>
           ) : (
             <>
@@ -426,11 +469,23 @@ export function TrainingPortal() {
               <MockApp activeHotspot={phase === 'walkthrough' ? step.label : null} />
 
               {phase === 'walkthrough' && (
-                <div className="tp-panel">
+                <div className="tp-panel" ref={panelRef} tabIndex={-1}>
                   <div className="tp-step-eyebrow">
                     STEP {stepIdx + 1} / {mod.steps.length} — {step.label}
                   </div>
                   <div className="tp-step-text">{step.text}</div>
+
+                  <label className="tp-notes-label">
+                    Your notes (private, saved on this device)
+                    <textarea
+                      className="tp-notes-input"
+                      rows={2}
+                      value={notes[noteKey] ?? ''}
+                      onChange={(event) => updateNote(noteKey, event.target.value)}
+                      placeholder="Jot down anything you want to remember about this step…"
+                    />
+                  </label>
+
                   <div className="tp-nav-row">
                     <button
                       type="button"
@@ -449,7 +504,7 @@ export function TrainingPortal() {
               )}
 
               {phase === 'quiz' && (
-                <div className="tp-panel">
+                <div className="tp-panel" ref={panelRef} tabIndex={-1}>
                   <div className="tp-quiz-eyebrow">QUICK CHECK</div>
                   {mod.quiz.map((q, qi) => (
                     <div key={qi} className="tp-question">
@@ -514,6 +569,8 @@ export function TrainingPortal() {
           )}
         </div>
       </div>
+
+      <HelpWidget />
     </div>
   )
 }

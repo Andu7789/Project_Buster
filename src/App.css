@@ -273,6 +273,7 @@ label {
 }
 
 input,
+select,
 textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -283,6 +284,7 @@ textarea {
 }
 
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible,
 button:focus-visible,
 a:focus-visible {
@@ -789,7 +791,7 @@ a:focus-visible {
 
 .entry-add-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 0.8fr 1.4fr auto;
+  grid-template-columns: 1.3fr 1fr 90px 1.3fr auto;
   gap: 10px;
   align-items: center;
   margin-top: 10px;
@@ -838,5 +840,32 @@ a:focus-visible {
 
   .add-worker-form {
     grid-template-columns: 1fr;
+  }
+
+  .modal-panel {
+    padding: 20px;
+  }
+
+  .entry-add-row {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .entry-add-row input,
+  .entry-add-row select {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .entry-add-row .gross-input {
+    flex: 0 1 90px;
+  }
+
+  .entry-add-row .entry-preview {
+    flex: 1 1 100%;
+  }
+
+  .entry-add-row button {
+    flex: 1 1 100%;
   }
 }

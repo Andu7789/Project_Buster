@@ -154,6 +154,7 @@ function ClientSection({
           </select>
           <input
             type="number"
+            className="gross-input"
             min="0"
             step="0.01"
             placeholder="Gross"

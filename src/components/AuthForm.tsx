@@ -8,11 +8,15 @@ export function AuthForm({
   portalHint,
   otherPortalPath,
   otherPortalPrompt,
+  secondaryPortalPath,
+  secondaryPortalPrompt,
 }: {
   portalLabel: string
   portalHint: string
   otherPortalPath: string
   otherPortalPrompt: string
+  secondaryPortalPath?: string
+  secondaryPortalPrompt?: string
 }) {
   const { signIn, signUp, requestPasswordReset } = useAuth()
   const [mode, setMode] = useState<Mode>('signin')
@@ -129,6 +133,11 @@ export function AuthForm({
         <a className="link-btn" href={otherPortalPath}>
           {otherPortalPrompt}
         </a>
+        {secondaryPortalPath && secondaryPortalPrompt && (
+          <a className="link-btn" href={secondaryPortalPath}>
+            {secondaryPortalPrompt}
+          </a>
+        )}
       </div>
     </section>
   )

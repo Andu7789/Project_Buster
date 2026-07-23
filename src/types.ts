@@ -1,4 +1,4 @@
-export type UserRole = 'worker' | 'owner'
+export type UserRole = 'worker' | 'owner' | 'learner'
 
 export type ProfileStatus = 'pending' | 'active' | 'suspended' | 'removed'
 
@@ -11,6 +11,13 @@ export interface Profile {
   owner_share_percent: number
   status: ProfileStatus
   created_at: string
+}
+
+export interface TrainingProgress {
+  id: string
+  learner_id: string
+  module_id: string
+  completed_at: string
 }
 
 export interface Submission {

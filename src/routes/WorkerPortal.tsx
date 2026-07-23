@@ -22,13 +22,15 @@ export function WorkerPortal() {
           portalHint="Enter the amount for whichever days you worked."
           otherPortalPath="/owner"
           otherPortalPrompt="Are you the owner? Sign in here"
+          secondaryPortalPath="/learn"
+          secondaryPortalPrompt="Here for training? Sign in here"
         />
       </div>
     )
   }
 
   return (
-    <AuthGate expectedRole="worker" loginPath="/" otherPortalPath="/owner" otherPortalLabel="owner">
+    <AuthGate expectedRole="worker" loginPath="/">
       {(profile) => <WorkerDashboard profile={profile} />}
     </AuthGate>
   )

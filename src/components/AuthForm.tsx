@@ -5,10 +5,8 @@ type Mode = 'signin' | 'signup' | 'forgot'
 
 export function AuthForm({
   portalLabel,
-  portalHint,
 }: {
   portalLabel: string
-  portalHint: string
 }) {
   const { signIn, signUp, requestPasswordReset } = useAuth()
   const [mode, setMode] = useState<Mode>('signin')
@@ -62,7 +60,6 @@ export function AuthForm({
         <div className="logo-mark">PS</div>
         <h2>{portalLabel}</h2>
         <p>
-          {mode === 'signin' && portalHint}
           {mode === 'signup' && 'Create your login using the email your employer added.'}
           {mode === 'forgot' && "Enter your email and we'll send you a reset link."}
         </p>

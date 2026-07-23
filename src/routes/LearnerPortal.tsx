@@ -19,7 +19,6 @@ export function LearnerPortal() {
       <div className="app-shell app-shell-center">
         <AuthForm
           portalLabel="Learner sign in"
-          portalHint="Work through the training modules at your own pace."
         />
       </div>
     )

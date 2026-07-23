@@ -19,7 +19,6 @@ export function OwnerPortal() {
       <div className="app-shell app-shell-center">
         <AuthForm
           portalLabel="Owner sign in"
-          portalHint="Review submissions and manage your team."
         />
       </div>
     )

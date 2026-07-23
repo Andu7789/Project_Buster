@@ -18,8 +18,7 @@ export function WorkerPortal() {
     return (
       <div className="app-shell app-shell-center">
         <AuthForm
-          portalLabel="Worker sign in"
-          portalHint="Enter the amount for whichever days you worked."
+          portalLabel="Contractor sign in"
         />
       </div>
     )

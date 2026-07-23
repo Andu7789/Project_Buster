@@ -309,6 +309,27 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.day-card-clickable {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+}
+
+.day-card-clickable:hover {
+  border-color: var(--accent-strong);
+  background: var(--surface);
+}
+
+.day-card-clickable strong {
+  font-size: 1.1rem;
+  color: var(--accent-ink);
+}
+
 .summary-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -711,6 +732,45 @@ a:focus-visible {
 
 .detail-table {
   margin-bottom: 20px;
+}
+
+.detail-table tfoot td {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.entry-client {
+  margin-bottom: 24px;
+}
+
+.entry-client h3 {
+  margin: 0 0 10px;
+}
+
+.entry-section {
+  margin-bottom: 16px;
+}
+
+.entry-section h4 {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.entry-add-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.8fr 1.4fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.entry-preview {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
 }
 
 /* Chart tooltip */

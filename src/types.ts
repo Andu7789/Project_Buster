@@ -25,3 +25,47 @@ export interface Submission {
   notes: string | null
   created_at: string
 }
+
+export interface Client {
+  id: string
+  name: string
+  active: boolean
+  created_at: string
+}
+
+export interface SaleType {
+  id: string
+  label: string
+  active: boolean
+  created_at: string
+}
+
+export type SaleSection = 'sexting' | 'customs'
+
+export interface SaleEntry {
+  id: string
+  worker_id: string
+  entry_date: string
+  client_id: string
+  section: SaleSection
+  buyer_username: string
+  sale_type_id: string
+  gross: number
+  net: number
+  earnings: number
+  created_at: string
+}
+
+export interface ClientInvoice {
+  id: string
+  client_id: string
+  week_start: string
+  week_end: string
+  sexting_net: number
+  customs_net: number
+  worker_cut: number
+  owner_cut: number
+  client_payout: number
+  dealt_with: boolean
+  created_at: string
+}

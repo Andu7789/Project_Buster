@@ -1,21 +1,56 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { SubmissionStatusBadge } from './StatusBadge'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
-import type { Submission } from '../types'
+import { sectionLabel } from '../lib/earnings'
+import type { Client, SaleEntry, Submission } from '../types'
 
 type Step = 'detail' | 'preview' | 'sent'
+
+interface BreakdownRow {
+  clientName: string
+  section: SaleEntry['section']
+  gross: number
+  net: number
+  earnings: number
+}
+
+function buildBreakdown(entries: SaleEntry[], clients: Client[]): BreakdownRow[] {
+  const rows = new Map<string, BreakdownRow>()
+  for (const entry of entries) {
+    const key = `${entry.client_id}:${entry.section}`
+    const existing = rows.get(key)
+    if (existing) {
+      existing.gross += entry.gross
+      existing.net += entry.net
+      existing.earnings += entry.earnings
+      continue
+    }
+    rows.set(key, {
+      clientName: clients.find((c) => c.id === entry.client_id)?.name ?? 'Unknown client',
+      section: entry.section,
+      gross: entry.gross,
+      net: entry.net,
+      earnings: entry.earnings,
+    })
+  }
+  return Array.from(rows.values())
+}
 
 export function SubmissionInvoiceModal({
   submission,
   workerName,
   workerEmail,
+  entries,
+  clients,
   onClose,
   onSendInvoice,
 }: {
   submission: Submission
   workerName: string
   workerEmail: string
+  entries: SaleEntry[]
+  clients: Client[]
   onClose: () => void
   onSendInvoice: (submissionId: string) => Promise<void>
 }) {
@@ -23,8 +58,8 @@ export function SubmissionInvoiceModal({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const ownerShareAmount = submission.amount * (submission.owner_share_percent / 100)
-  const invoiceAmount = submission.amount - ownerShareAmount
+  const breakdown = useMemo(() => buildBreakdown(entries, clients), [entries, clients])
+  const invoiceAmount = submission.amount
 
   async function handleSend() {
     setSending(true)
@@ -49,14 +84,6 @@ export function SubmissionInvoiceModal({
         </p>
 
         <div className="invoice-lines">
-          <div className="invoice-line">
-            <span>Total submitted</span>
-            <span>{formatCurrency(submission.amount)}</span>
-          </div>
-          <div className="invoice-line invoice-line-deduct">
-            <span>Owner share ({submission.owner_share_percent}%)</span>
-            <span>−{formatCurrency(ownerShareAmount)}</span>
-          </div>
           <div className="invoice-line invoice-line-total">
             <span>Invoice amount</span>
             <span>{formatCurrency(invoiceAmount)}</span>
@@ -109,12 +136,8 @@ export function SubmissionInvoiceModal({
       </p>
       <div className="detail-summary">
         <div>
-          <p className="label">Total submitted</p>
+          <p className="label">Total earned</p>
           <strong>{formatCurrency(submission.amount)}</strong>
-        </div>
-        <div>
-          <p className="label">Owner share</p>
-          <strong>{formatCurrency(ownerShareAmount)}</strong>
         </div>
         <div>
           <p className="label">Status</p>
@@ -127,17 +150,30 @@ export function SubmissionInvoiceModal({
       <table className="detail-table">
         <thead>
           <tr>
-            <th>Day</th>
-            <th>Amount</th>
+            <th>Client</th>
+            <th>Section</th>
+            <th>Gross</th>
+            <th>Net</th>
+            <th>Earnings</th>
           </tr>
         </thead>
         <tbody>
-          {Object.entries(submission.day_amounts).map(([day, amount]) => (
-            <tr key={day}>
-              <td>{day}</td>
-              <td>{formatCurrency(amount)}</td>
+          {breakdown.map((row) => (
+            <tr key={`${row.clientName}:${row.section}`}>
+              <td>{row.clientName}</td>
+              <td>{sectionLabel[row.section]}</td>
+              <td>{formatCurrency(row.gross)}</td>
+              <td>{formatCurrency(row.net)}</td>
+              <td>{formatCurrency(row.earnings)}</td>
             </tr>
           ))}
+          {breakdown.length === 0 && (
+            <tr>
+              <td colSpan={5} className="empty-row">
+                No line items recorded for this week.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 

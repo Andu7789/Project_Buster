@@ -1,38 +1,50 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/authContext'
-import { listSubmissionsForWorker, submitTimesheet } from '../data/queries'
-import { daysOfWeek, formatCurrency, formatWeekRange, getCurrentWeekRange } from '../lib/dates'
-import type { Profile, Submission } from '../types'
+import {
+  listClients,
+  listSaleEntriesForWorker,
+  listSaleTypes,
+  listSubmissionsForWorker,
+  submitTimesheet,
+} from '../data/queries'
+import { daysOfWeek, formatCurrency, formatDayLabel, formatWeekRange, getCurrentWeekRange, getWeekDates } from '../lib/dates'
+import type { Client, Profile, SaleEntry, SaleType, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { SubmissionStatusBadge } from '../components/StatusBadge'
 import { Modal } from '../components/Modal'
-
-function parseAmount(raw: string): number | null {
-  if (raw.trim() === '') return 0
-  const value = Number(raw)
-  if (!Number.isFinite(value) || value < 0) return null
-  return value
-}
+import { DayEntryModal } from '../components/DayEntryModal'
 
 export function WorkerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
-  const [entries, setEntries] = useState<Record<string, string>>({})
-  const [notes, setNotes] = useState('')
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
+  const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   const { weekStart, weekEnd } = useMemo(() => getCurrentWeekRange(), [])
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart])
 
   useEffect(() => {
     let cancelled = false
-    listSubmissionsForWorker(profile.id)
-      .then((data) => {
-        if (!cancelled) setSubmissions(data)
+    Promise.all([
+      listSubmissionsForWorker(profile.id),
+      listClients(),
+      listSaleTypes(),
+      listSaleEntriesForWorker(profile.id, weekStart, weekEnd),
+    ])
+      .then(([submissionData, clientData, saleTypeData, entryData]) => {
+        if (cancelled) return
+        setSubmissions(submissionData)
+        setClients(clientData)
+        setSaleTypes(saleTypeData)
+        setWeekEntries(entryData)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load your timesheets.')
@@ -43,41 +55,46 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     return () => {
       cancelled = true
     }
-  }, [profile.id])
+  }, [profile.id, weekStart, weekEnd])
 
   const alreadySubmittedThisWeek = submissions.some((submission) => submission.week_start === weekStart)
   const lifetimeTotal = useMemo(() => submissions.reduce((sum, submission) => sum + submission.amount, 0), [submissions])
-  const liveTotal = useMemo(() => {
-    return daysOfWeek.reduce((sum, day) => {
-      const parsed = parseAmount(entries[day] ?? '')
-      return sum + (parsed ?? 0)
-    }, 0)
-  }, [entries])
+
+  const totalsByDate = useMemo(() => {
+    const totals = new Map<string, number>()
+    for (const entry of weekEntries) {
+      totals.set(entry.entry_date, (totals.get(entry.entry_date) ?? 0) + entry.earnings)
+    }
+    return totals
+  }, [weekEntries])
+
+  const liveTotal = useMemo(() => weekEntries.reduce((sum, entry) => sum + entry.earnings, 0), [weekEntries])
 
   const selectedSubmission = submissions.find((submission) => submission.id === selectedSubmissionId) ?? null
+  const selectedDayIndex = selectedDate ? weekDates.indexOf(selectedDate) : -1
+  const selectedDayEntries = selectedDate ? weekEntries.filter((entry) => entry.entry_date === selectedDate) : []
 
-  function handleEntryChange(day: string, value: string) {
-    setEntries((prev) => ({ ...prev, [day]: value }))
+  function handleEntryAdded(entry: SaleEntry) {
+    setWeekEntries((previous) => [...previous, entry])
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
+  function handleEntryDeleted(entryId: string) {
+    setWeekEntries((previous) => previous.filter((entry) => entry.id !== entryId))
+  }
+
+  async function handleSubmit() {
     setFormError(null)
     setMessage(null)
 
     const dayAmounts: Record<string, number> = {}
-    for (const day of daysOfWeek) {
-      const parsed = parseAmount(entries[day] ?? '')
-      if (parsed === null) {
-        setFormError(`Enter a valid amount for ${day}, or leave it blank.`)
-        return
-      }
-      if (parsed > 0) dayAmounts[day] = parsed
-    }
+    daysOfWeek.forEach((day, index) => {
+      const total = totalsByDate.get(weekDates[index]) ?? 0
+      if (total > 0) dayAmounts[day] = total
+    })
 
     const total = Object.values(dayAmounts).reduce((sum, value) => sum + value, 0)
     if (!total) {
-      setFormError('Enter at least one amount before submitting.')
+      setFormError('Add at least one entry before submitting.')
       return
     }
 
@@ -90,11 +107,8 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         dayAmounts,
         amount: total,
         ownerSharePercent: profile.owner_share_percent,
-        notes: notes.trim() || undefined,
       })
       setSubmissions((previous) => [created, ...previous])
-      setEntries({})
-      setNotes('')
       setMessage('Weekly submission sent to your employer.')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not submit your timesheet.')
@@ -115,51 +129,43 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
           </div>
         </div>
 
-        {alreadySubmittedThisWeek ? (
+        {alreadySubmittedThisWeek && (
           <p className="info-text">
-            You've already submitted this week's timesheet. It's in your history below — reach out to your employer if
-            it needs a change.
+            You've already submitted this week's timesheet. You can still open a day below to review its entries.
           </p>
-        ) : (
-          <form className="stack" onSubmit={handleSubmit}>
-            <div className="day-grid">
-              {daysOfWeek.map((day) => (
-                <label key={day} className="day-card">
+        )}
+
+        <div className="stack">
+          <div className="day-grid">
+            {daysOfWeek.map((day, index) => {
+              const date = weekDates[index]
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  className="day-card day-card-clickable"
+                  onClick={() => setSelectedDate(date)}
+                >
                   <span>{day}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={entries[day] ?? ''}
-                    onChange={(event) => handleEntryChange(day, event.target.value)}
-                    placeholder="0.00"
-                  />
-                </label>
-              ))}
-            </div>
+                  <strong>{formatCurrency(totalsByDate.get(date) ?? 0)}</strong>
+                </button>
+              )
+            })}
+          </div>
 
-            <div className="summary-card">
-              <strong>Current week total</strong>
-              <p className="summary-figure">{formatCurrency(liveTotal)}</p>
-            </div>
+          <div className="summary-card">
+            <strong>Current week total</strong>
+            <p className="summary-figure">{formatCurrency(liveTotal)}</p>
+          </div>
 
-            <label>
-              Note (optional)
-              <textarea
-                rows={2}
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Anything your employer should know about this week"
-              />
-            </label>
-
-            <button type="submit" className="btn-primary" disabled={submitting}>
+          {!alreadySubmittedThisWeek && (
+            <button type="button" className="btn-primary" onClick={handleSubmit} disabled={submitting}>
               {submitting ? 'Submitting…' : 'Submit timesheet'}
             </button>
-            {formError && <p className="message message-error">{formError}</p>}
-            {message && <p className="message message-info">{message}</p>}
-          </form>
-        )}
+          )}
+          {formError && <p className="message message-error">{formError}</p>}
+          {message && <p className="message message-info">{message}</p>}
+        </div>
       </section>
 
       <section className="panel">
@@ -255,6 +261,21 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
             </div>
           )}
         </Modal>
+      )}
+
+      {selectedDate && selectedDayIndex !== -1 && (
+        <DayEntryModal
+          date={selectedDate}
+          dayLabel={formatDayLabel(daysOfWeek[selectedDayIndex], selectedDate)}
+          workerId={profile.id}
+          clients={clients}
+          saleTypes={saleTypes}
+          entries={selectedDayEntries}
+          readOnly={alreadySubmittedThisWeek}
+          onEntryAdded={handleEntryAdded}
+          onEntryDeleted={handleEntryDeleted}
+          onClose={() => setSelectedDate(null)}
+        />
       )}
     </div>
   )

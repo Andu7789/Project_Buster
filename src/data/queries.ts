@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
-import type { Profile, ProfileStatus, Submission } from '../types'
+import { calcEarnings, calcNet } from '../lib/earnings'
+import type { Client, ClientInvoice, Profile, ProfileStatus, SaleEntry, SaleSection, SaleType, Submission } from '../types'
 
 function requireClient() {
   if (!supabase) throw new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
@@ -163,5 +164,158 @@ export async function submitTimesheet(input: {
 export async function markDealtWith(submissionId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_submissions').update({ dealt_with: true }).eq('id', submissionId)
+  if (error) throw error
+}
+
+export async function listClients(): Promise<Client[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_clients').select('*').order('name', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as Client[]
+}
+
+export async function addClient(name: string): Promise<Client> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_clients').insert({ name: name.trim() }).select('*').single()
+  if (error) throw error
+  return data as Client
+}
+
+export async function setClientActive(clientId: string, active: boolean): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_clients').update({ active }).eq('id', clientId)
+  if (error) throw error
+}
+
+export async function listSaleTypes(): Promise<SaleType[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_sale_types').select('*').order('label', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as SaleType[]
+}
+
+export async function addSaleType(label: string): Promise<SaleType> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_sale_types').insert({ label: label.trim() }).select('*').single()
+  if (error) throw error
+  return data as SaleType
+}
+
+export async function setSaleTypeActive(saleTypeId: string, active: boolean): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_sale_types').update({ active }).eq('id', saleTypeId)
+  if (error) throw error
+}
+
+export async function listSaleEntriesForWorker(workerId: string, weekStart: string, weekEnd: string): Promise<SaleEntry[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_sale_entries')
+    .select('*')
+    .eq('worker_id', workerId)
+    .gte('entry_date', weekStart)
+    .lte('entry_date', weekEnd)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as SaleEntry[]
+}
+
+export async function addSaleEntry(input: {
+  workerId: string
+  entryDate: string
+  clientId: string
+  section: SaleSection
+  buyerUsername: string
+  saleTypeId: string
+  gross: number
+}): Promise<SaleEntry> {
+  const client = requireClient()
+  const net = calcNet(input.gross)
+  const earnings = calcEarnings(net, input.section)
+
+  const { data, error } = await client
+    .from('buster_sale_entries')
+    .insert({
+      worker_id: input.workerId,
+      entry_date: input.entryDate,
+      client_id: input.clientId,
+      section: input.section,
+      buyer_username: input.buyerUsername.trim(),
+      sale_type_id: input.saleTypeId,
+      gross: input.gross,
+      net,
+      earnings,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as SaleEntry
+}
+
+export async function deleteSaleEntry(entryId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_sale_entries').delete().eq('id', entryId)
+  if (error) throw error
+}
+
+export async function listSaleEntriesForWeek(weekStart: string, weekEnd: string): Promise<SaleEntry[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_sale_entries')
+    .select('*')
+    .gte('entry_date', weekStart)
+    .lte('entry_date', weekEnd)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as SaleEntry[]
+}
+
+export async function listClientInvoices(): Promise<ClientInvoice[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_client_invoices')
+    .select('*')
+    .order('week_start', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as ClientInvoice[]
+}
+
+export async function createClientInvoice(input: {
+  clientId: string
+  weekStart: string
+  weekEnd: string
+  sextingNet: number
+  customsNet: number
+  workerCut: number
+  ownerCut: number
+  clientPayout: number
+}): Promise<ClientInvoice> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_client_invoices')
+    .insert({
+      client_id: input.clientId,
+      week_start: input.weekStart,
+      week_end: input.weekEnd,
+      sexting_net: input.sextingNet,
+      customs_net: input.customsNet,
+      worker_cut: input.workerCut,
+      owner_cut: input.ownerCut,
+      client_payout: input.clientPayout,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as ClientInvoice
+}
+
+export async function markClientInvoiceDealtWith(invoiceId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_client_invoices').update({ dealt_with: true }).eq('id', invoiceId)
   if (error) throw error
 }

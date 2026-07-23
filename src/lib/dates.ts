@@ -1,5 +1,20 @@
 export const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
+/** Returns the ISO date string for each day of `daysOfWeek`, starting from `weekStart` (a Monday). */
+export function getWeekDates(weekStart: string): string[] {
+  const monday = new Date(weekStart)
+  return daysOfWeek.map((_, index) => {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + index)
+    return toISODate(date)
+  })
+}
+
+export function formatDayLabel(day: string, isoDate: string): string {
+  const date = new Date(isoDate)
+  return `${day}, ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+}
+
 function toISODate(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')

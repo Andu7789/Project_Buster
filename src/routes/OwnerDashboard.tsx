@@ -1,21 +1,67 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../lib/authContext'
-import { addWorker, listAllSubmissions, listWorkers, markDealtWith, setWorkerStatus, updateWorkerShare } from '../data/queries'
-import { formatCurrency, formatWeekRange } from '../lib/dates'
-import type { Profile, ProfileStatus, Submission } from '../types'
+import {
+  addClient,
+  addSaleType,
+  addWorker,
+  createClientInvoice,
+  listAllSubmissions,
+  listClientInvoices,
+  listClients,
+  listSaleEntriesForWeek,
+  listSaleEntriesForWorker,
+  listSaleTypes,
+  listWorkers,
+  markClientInvoiceDealtWith,
+  markDealtWith,
+  setClientActive,
+  setSaleTypeActive,
+  setWorkerStatus,
+  updateWorkerShare,
+} from '../data/queries'
+import { formatCurrency, formatWeekRange, getCurrentWeekRange } from '../lib/dates'
+import { calcClientPayout, calcOwnerCut } from '../lib/earnings'
+import type { Client, ClientInvoice, Profile, ProfileStatus, SaleEntry, SaleSection, SaleType, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { StatCard } from '../components/StatCard'
 import { ProfileStatusBadge, SubmissionStatusBadge } from '../components/StatusBadge'
 import { SubmissionInvoiceModal } from '../components/SubmissionInvoiceModal'
+import { ClientInvoiceModal } from '../components/ClientInvoiceModal'
 import { WeekTrendChart } from '../components/WeekTrendChart'
+
+function clientPayoutTotal(entries: SaleEntry[]): number {
+  const netBySection: Record<SaleSection, number> = { sexting: 0, customs: 0 }
+  for (const entry of entries) netBySection[entry.section] += entry.net
+  return (Object.keys(netBySection) as SaleSection[]).reduce(
+    (sum, section) => sum + calcClientPayout(netBySection[section], section),
+    0,
+  )
+}
 
 export function OwnerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
 
   const [workers, setWorkers] = useState<Profile[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
+  const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
+  const [clientInvoices, setClientInvoices] = useState<ClientInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  const { weekStart: currentWeekStart, weekEnd: currentWeekEnd } = useMemo(() => getCurrentWeekRange(), [])
+
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
+  const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
+
+  const [newClientName, setNewClientName] = useState('')
+  const [addingClient, setAddingClient] = useState(false)
+  const [clientError, setClientError] = useState<string | null>(null)
+
+  const [newSaleTypeLabel, setNewSaleTypeLabel] = useState('')
+  const [addingSaleType, setAddingSaleType] = useState(false)
+  const [saleTypeError, setSaleTypeError] = useState<string | null>(null)
 
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
@@ -34,11 +80,22 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([listWorkers(), listAllSubmissions()])
-      .then(([workerData, submissionData]) => {
+    Promise.all([
+      listWorkers(),
+      listAllSubmissions(),
+      listClients(),
+      listSaleTypes(),
+      listSaleEntriesForWeek(currentWeekStart, currentWeekEnd),
+      listClientInvoices(),
+    ])
+      .then(([workerData, submissionData, clientData, saleTypeData, weekEntryData, clientInvoiceData]) => {
         if (cancelled) return
         setWorkers(workerData)
         setSubmissions(submissionData)
+        setClients(clientData)
+        setSaleTypes(saleTypeData)
+        setWeekEntries(weekEntryData)
+        setClientInvoices(clientInvoiceData)
         setSelectedWorkerId((current) => current ?? workerData[0]?.id ?? null)
       })
       .catch((err) => {
@@ -50,7 +107,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [currentWeekStart, currentWeekEnd])
 
   const activeWorkers = workers.filter((worker) => worker.status === 'active').length
   const pendingInvites = workers.filter((worker) => worker.status === 'pending').length
@@ -83,6 +140,28 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const selectedWorker = workers.find((worker) => worker.id === selectedWorkerId) ?? null
   const selectedWorkerSubmissions = submissions.filter((submission) => submission.worker_id === selectedWorkerId)
   const selectedSubmission = submissions.find((submission) => submission.id === selectedSubmissionId) ?? null
+
+  const activeClients = clients.filter((client) => client.active)
+  const selectedClient = clients.find((client) => client.id === selectedClientId) ?? null
+  const selectedClientEntries = selectedClientId ? weekEntries.filter((entry) => entry.client_id === selectedClientId) : []
+  const selectedClientInvoice = selectedClientId
+    ? clientInvoices.find((invoice) => invoice.client_id === selectedClientId && invoice.week_start === currentWeekStart) ?? null
+    : null
+
+  useEffect(() => {
+    if (!selectedSubmission) return
+    let cancelled = false
+    listSaleEntriesForWorker(selectedSubmission.worker_id, selectedSubmission.week_start, selectedSubmission.week_end)
+      .then((data) => {
+        if (!cancelled) setSelectedSubmissionEntries(data)
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedSubmissionEntries([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSubmission])
 
   async function handleAddWorker(event: FormEvent) {
     event.preventDefault()
@@ -165,10 +244,99 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     if (confirmed) handleStatusChange(worker.id, 'removed')
   }
 
+  async function handleAddClient(event: FormEvent) {
+    event.preventDefault()
+    setClientError(null)
+    const name = newClientName.trim()
+    if (!name) {
+      setClientError('Enter a client name.')
+      return
+    }
+    setAddingClient(true)
+    try {
+      const created = await addClient(name)
+      setClients((previous) => [...previous, created])
+      setNewClientName('')
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not add this client.')
+    } finally {
+      setAddingClient(false)
+    }
+  }
+
+  async function handleToggleClient(clientToToggle: Client) {
+    const active = !clientToToggle.active
+    try {
+      await setClientActive(clientToToggle.id, active)
+      setClients((previous) => previous.map((c) => (c.id === clientToToggle.id ? { ...c, active } : c)))
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
+  async function handleAddSaleType(event: FormEvent) {
+    event.preventDefault()
+    setSaleTypeError(null)
+    const label = newSaleTypeLabel.trim()
+    if (!label) {
+      setSaleTypeError('Enter a type name.')
+      return
+    }
+    setAddingSaleType(true)
+    try {
+      const created = await addSaleType(label)
+      setSaleTypes((previous) => [...previous, created])
+      setNewSaleTypeLabel('')
+    } catch (err) {
+      setSaleTypeError(err instanceof Error ? err.message : 'Could not add this type.')
+    } finally {
+      setAddingSaleType(false)
+    }
+  }
+
+  async function handleToggleSaleType(saleTypeToToggle: SaleType) {
+    const active = !saleTypeToToggle.active
+    try {
+      await setSaleTypeActive(saleTypeToToggle.id, active)
+      setSaleTypes((previous) => previous.map((t) => (t.id === saleTypeToToggle.id ? { ...t, active } : t)))
+    } catch (err) {
+      setSaleTypeError(err instanceof Error ? err.message : 'Could not update this type.')
+    }
+  }
+
   async function handleSendInvoice(submissionId: string) {
     await markDealtWith(submissionId)
     setSubmissions((previous) =>
       previous.map((submission) => (submission.id === submissionId ? { ...submission, dealt_with: true } : submission)),
+    )
+  }
+
+  async function handleCreateClientInvoice(client: Client): Promise<ClientInvoice> {
+    const entries = weekEntries.filter((entry) => entry.client_id === client.id)
+    const netBySection: Record<SaleSection, number> = { sexting: 0, customs: 0 }
+    for (const entry of entries) netBySection[entry.section] += entry.net
+
+    const created = await createClientInvoice({
+      clientId: client.id,
+      weekStart: currentWeekStart,
+      weekEnd: currentWeekEnd,
+      sextingNet: netBySection.sexting,
+      customsNet: netBySection.customs,
+      workerCut: entries.reduce((sum, entry) => sum + entry.earnings, 0),
+      ownerCut: (Object.keys(netBySection) as SaleSection[]).reduce(
+        (sum, section) => sum + calcOwnerCut(netBySection[section], section),
+        0,
+      ),
+      clientPayout: clientPayoutTotal(entries),
+    })
+    setClientInvoices((previous) => [created, ...previous])
+    return created
+  }
+
+  async function handleSendClientInvoice(invoiceId: string) {
+    await markClientInvoiceDealtWith(invoiceId)
+    setClientInvoices((previous) =>
+      previous.map((invoice) => (invoice.id === invoiceId ? { ...invoice, dealt_with: true } : invoice)),
     )
   }
 
@@ -327,6 +495,114 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           <section className="panel">
             <div className="panel-head">
               <div>
+                <h2>Clients</h2>
+                <p>Clients configured here appear in every worker's day-entry modal.</p>
+              </div>
+            </div>
+
+            <form className="add-worker-form" onSubmit={handleAddClient}>
+              <label>
+                Client name
+                <input value={newClientName} onChange={(event) => setNewClientName(event.target.value)} placeholder="Sav" />
+              </label>
+              <button type="submit" className="btn-primary" disabled={addingClient}>
+                {addingClient ? 'Adding…' : 'Add client'}
+              </button>
+            </form>
+            {clientError && <p className="message message-error">{clientError}</p>}
+
+            <div className="table-wrapper">
+              <table className="submission-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clients.map((clientRow) => (
+                    <tr key={clientRow.id}>
+                      <td>{clientRow.name}</td>
+                      <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
+                      <td className="roster-actions">
+                        <button type="button" className="btn-outline" onClick={() => handleToggleClient(clientRow)}>
+                          {clientRow.active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {clients.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="empty-row">
+                        No clients yet — add your first one above.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Sale types</h2>
+                <p>Types configured here populate the Type dropdown for every entry a worker adds.</p>
+              </div>
+            </div>
+
+            <form className="add-worker-form" onSubmit={handleAddSaleType}>
+              <label>
+                Type name
+                <input
+                  value={newSaleTypeLabel}
+                  onChange={(event) => setNewSaleTypeLabel(event.target.value)}
+                  placeholder="Unlock"
+                />
+              </label>
+              <button type="submit" className="btn-primary" disabled={addingSaleType}>
+                {addingSaleType ? 'Adding…' : 'Add type'}
+              </button>
+            </form>
+            {saleTypeError && <p className="message message-error">{saleTypeError}</p>}
+
+            <div className="table-wrapper">
+              <table className="submission-table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {saleTypes.map((saleType) => (
+                    <tr key={saleType.id}>
+                      <td>{saleType.label}</td>
+                      <td>{saleType.active ? 'Active' : 'Inactive'}</td>
+                      <td className="roster-actions">
+                        <button type="button" className="btn-outline" onClick={() => handleToggleSaleType(saleType)}>
+                          {saleType.active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {saleTypes.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="empty-row">
+                        No types yet — add your first one above.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
                 <h2>Submissions</h2>
                 <p>Select a worker to review their weekly timesheets and mark invoices.</p>
               </div>
@@ -371,7 +647,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                       <tr>
                         <th>Week</th>
                         <th>Total</th>
-                        <th>Owner share</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -380,7 +655,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                         <tr key={submission.id} className="submission-row" onClick={() => setSelectedSubmissionId(submission.id)}>
                           <td>{formatWeekRange(submission.week_start, submission.week_end)}</td>
                           <td>{formatCurrency(submission.amount)}</td>
-                          <td>{formatCurrency(submission.amount * (submission.owner_share_percent / 100))}</td>
                           <td>
                             <SubmissionStatusBadge dealtWith={submission.dealt_with} />
                           </td>
@@ -388,7 +662,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
                       ))}
                       {selectedWorkerSubmissions.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="empty-row">
+                          <td colSpan={3} className="empty-row">
                             No submissions yet
                           </td>
                         </tr>
@@ -401,6 +675,73 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               <p className="info-text">Select a worker card to view their weekly submissions.</p>
             )}
           </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>Client invoices</h2>
+                <p>This week's sales per client — create and send their weekly payout invoice.</p>
+              </div>
+            </div>
+
+            <div className="worker-cards">
+              {activeClients.map((client) => {
+                const entries = weekEntries.filter((entry) => entry.client_id === client.id)
+                const invoice = clientInvoices.find(
+                  (inv) => inv.client_id === client.id && inv.week_start === currentWeekStart,
+                )
+                return (
+                  <article
+                    key={client.id}
+                    className={`worker-card ${client.id === selectedClientId ? 'selected' : ''}`}
+                    onClick={() => setSelectedClientId(client.id)}
+                  >
+                    <strong>{client.name}</strong>
+                    <p>Client payout: {formatCurrency(clientPayoutTotal(entries))}</p>
+                    <p className={invoice?.dealt_with ? undefined : 'text-danger'}>
+                      {invoice?.dealt_with ? 'Invoiced' : 'Not yet invoiced'}
+                    </p>
+                  </article>
+                )
+              })}
+              {activeClients.length === 0 && <p className="info-text">No active clients yet.</p>}
+            </div>
+
+            <div className="table-header">
+              <h3>Invoice history</h3>
+            </div>
+            <div className="table-wrapper">
+              <table className="submission-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Week</th>
+                    <th>Client payout</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientInvoices.map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td>{clients.find((c) => c.id === invoice.client_id)?.name ?? 'Unknown client'}</td>
+                      <td>{formatWeekRange(invoice.week_start, invoice.week_end)}</td>
+                      <td>{formatCurrency(invoice.client_payout)}</td>
+                      <td>
+                        <SubmissionStatusBadge dealtWith={invoice.dealt_with} />
+                      </td>
+                    </tr>
+                  ))}
+                  {clientInvoices.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="empty-row">
+                        No client invoices yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       )}
 
@@ -409,8 +750,24 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           submission={selectedSubmission}
           workerName={selectedWorker.full_name}
           workerEmail={selectedWorker.email}
+          entries={selectedSubmissionEntries}
+          clients={clients}
           onClose={() => setSelectedSubmissionId(null)}
           onSendInvoice={handleSendInvoice}
+        />
+      )}
+
+      {selectedClient && (
+        <ClientInvoiceModal
+          clientName={selectedClient.name}
+          weekStart={currentWeekStart}
+          weekEnd={currentWeekEnd}
+          entries={selectedClientEntries}
+          workers={workers}
+          existingInvoice={selectedClientInvoice}
+          onClose={() => setSelectedClientId(null)}
+          onCreateInvoice={() => handleCreateClientInvoice(selectedClient)}
+          onSendInvoice={handleSendClientInvoice}
         />
       )}
     </div>

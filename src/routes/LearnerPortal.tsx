@@ -20,8 +20,6 @@ export function LearnerPortal() {
         <AuthForm
           portalLabel="Learner sign in"
           portalHint="Work through the training modules at your own pace."
-          otherPortalPath="/"
-          otherPortalPrompt="Not a learner? Sign in here"
         />
       </div>
     )

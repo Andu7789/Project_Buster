@@ -20,8 +20,6 @@ export function OwnerPortal() {
         <AuthForm
           portalLabel="Owner sign in"
           portalHint="Review submissions and manage your team."
-          otherPortalPath="/"
-          otherPortalPrompt="Are you a worker? Sign in here"
         />
       </div>
     )

@@ -20,10 +20,6 @@ export function WorkerPortal() {
         <AuthForm
           portalLabel="Worker sign in"
           portalHint="Enter the amount for whichever days you worked."
-          otherPortalPath="/owner"
-          otherPortalPrompt="Are you the owner? Sign in here"
-          secondaryPortalPath="/learn"
-          secondaryPortalPrompt="Here for training? Sign in here"
         />
       </div>
     )

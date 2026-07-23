@@ -6,17 +6,9 @@ type Mode = 'signin' | 'signup' | 'forgot'
 export function AuthForm({
   portalLabel,
   portalHint,
-  otherPortalPath,
-  otherPortalPrompt,
-  secondaryPortalPath,
-  secondaryPortalPrompt,
 }: {
   portalLabel: string
   portalHint: string
-  otherPortalPath: string
-  otherPortalPrompt: string
-  secondaryPortalPath?: string
-  secondaryPortalPrompt?: string
 }) {
   const { signIn, signUp, requestPasswordReset } = useAuth()
   const [mode, setMode] = useState<Mode>('signin')
@@ -129,14 +121,6 @@ export function AuthForm({
           <button type="button" className="link-btn" onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}>
             {mode === 'signin' ? 'New here? Create an account' : 'Already have an account? Sign in'}
           </button>
-        )}
-        <a className="link-btn" href={otherPortalPath}>
-          {otherPortalPrompt}
-        </a>
-        {secondaryPortalPath && secondaryPortalPrompt && (
-          <a className="link-btn" href={secondaryPortalPath}>
-            {secondaryPortalPrompt}
-          </a>
         )}
       </div>
     </section>

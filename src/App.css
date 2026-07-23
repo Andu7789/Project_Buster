@@ -711,7 +711,7 @@ a:focus-visible {
 
 .modal-panel {
   position: relative;
-  width: min(640px, 100%);
+  width: min(720px, 100%);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   background: var(--surface);
@@ -791,7 +791,7 @@ a:focus-visible {
 
 .entry-add-row {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 90px 1.3fr auto;
+  grid-template-columns: minmax(100px, 1fr) 100px 90px auto auto;
   gap: 10px;
   align-items: center;
   margin-top: 10px;
@@ -800,6 +800,7 @@ a:focus-visible {
 .entry-preview {
   font-size: 0.82rem;
   color: var(--ink-muted);
+  white-space: nowrap;
 }
 
 /* Chart tooltip */

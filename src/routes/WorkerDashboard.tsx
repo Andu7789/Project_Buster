@@ -163,7 +163,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
 
           {!alreadySubmittedThisWeek && (
             <button type="button" className="btn-primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit timesheet'}
+              {submitting ? 'Submitting…' : 'Submit earnings'}
             </button>
           )}
           {formError && <p className="message message-error">{formError}</p>}

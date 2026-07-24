@@ -32,7 +32,7 @@ export function WeekTrendChart({ data }: { data: WeekTrendPoint[] }) {
           axisLine={false}
           width={44}
           tick={{ fill: 'var(--ink-muted)', fontSize: 12 }}
-          tickFormatter={(value: number) => `£${value}`}
+          tickFormatter={(value: number) => `$${value}`}
         />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-tint)' }} />
         <Bar dataKey="total" fill="var(--accent-strong)" radius={[4, 4, 0, 0]} maxBarSize={40} />

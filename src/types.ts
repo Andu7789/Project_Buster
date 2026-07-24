@@ -53,7 +53,7 @@ export interface SaleEntry {
   id: string
   worker_id: string
   entry_date: string
-  client_id: string
+  client_id: string | null
   section: SaleSection
   buyer_username: string
   sale_type_id: string

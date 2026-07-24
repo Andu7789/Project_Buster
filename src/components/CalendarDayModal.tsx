@@ -6,6 +6,20 @@ import { formatCurrency } from '../lib/dates'
 import type { Client, Profile, SaleEntry, SaleSection, SaleType } from '../types'
 
 const sections: SaleSection[] = ['sexting', 'customs']
+const GENERAL_CLIENT_VALUE = ''
+
+function ClientSelect({ value, clients, onChange }: { value: string; clients: Client[]; onChange: (value: string) => void }) {
+  return (
+    <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <option value={GENERAL_CLIENT_VALUE}>General (no client)</option>
+      {clients.map((client) => (
+        <option key={client.id} value={client.id}>
+          {client.name}
+        </option>
+      ))}
+    </select>
+  )
+}
 
 function EntryRow({
   entry,
@@ -23,7 +37,7 @@ function EntryRow({
   onEntryDeleted: (entryId: string) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [clientId, setClientId] = useState(entry.client_id)
+  const [clientId, setClientId] = useState(entry.client_id ?? GENERAL_CLIENT_VALUE)
   const [section, setSection] = useState<SaleSection>(entry.section)
   const [buyerUsername, setBuyerUsername] = useState(entry.buyer_username)
   const [saleTypeId, setSaleTypeId] = useState(entry.sale_type_id)
@@ -35,7 +49,7 @@ function EntryRow({
   const hasValidGross = gross.trim() !== '' && Number.isFinite(grossValue) && grossValue >= 0
 
   function startEdit() {
-    setClientId(entry.client_id)
+    setClientId(entry.client_id ?? GENERAL_CLIENT_VALUE)
     setSection(entry.section)
     setBuyerUsername(entry.buyer_username)
     setSaleTypeId(entry.sale_type_id)
@@ -57,7 +71,7 @@ function EntryRow({
     setSaving(true)
     try {
       const updated = await updateSaleEntry(entry.id, {
-        clientId,
+        clientId: clientId || null,
         section,
         buyerUsername,
         saleTypeId,
@@ -88,16 +102,10 @@ function EntryRow({
     const previewEarnings = previewNet !== null ? calcEarnings(previewNet, section) : null
     return (
       <tr>
-        <td colSpan={8}>
-          <div className="entry-add-row">
+        <td colSpan={9}>
+          <div className="calendar-entry-row">
             <span>{workerLabel}</span>
-            <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+            <ClientSelect value={clientId} clients={clients} onChange={setClientId} />
             <select value={section} onChange={(event) => setSection(event.target.value as SaleSection)}>
               {sections.map((value) => (
                 <option key={value} value={value}>
@@ -145,7 +153,7 @@ function EntryRow({
   return (
     <tr>
       <td>{workerLabel}</td>
-      <td>{clients.find((client) => client.id === entry.client_id)?.name ?? '—'}</td>
+      <td>{entry.client_id ? clients.find((client) => client.id === entry.client_id)?.name ?? '—' : 'General'}</td>
       <td>{sectionLabel[entry.section]}</td>
       <td>{entry.buyer_username}</td>
       <td>{saleTypes.find((type) => type.id === entry.sale_type_id)?.label ?? '—'}</td>
@@ -181,7 +189,7 @@ function AddEntryRow({
   onEntryAdded: (entry: SaleEntry) => void
 }) {
   const [workerId, setWorkerId] = useState(workers[0]?.id ?? '')
-  const [clientId, setClientId] = useState(clients[0]?.id ?? '')
+  const [clientId, setClientId] = useState(GENERAL_CLIENT_VALUE)
   const [section, setSection] = useState<SaleSection>('sexting')
   const [buyerUsername, setBuyerUsername] = useState('')
   const [saleTypeId, setSaleTypeId] = useState(saleTypes[0]?.id ?? '')
@@ -198,10 +206,6 @@ function AddEntryRow({
     setError(null)
     if (!workerId) {
       setError('Choose a worker.')
-      return
-    }
-    if (!clientId) {
-      setError('Choose a client.')
       return
     }
     if (!buyerUsername.trim()) {
@@ -222,7 +226,7 @@ function AddEntryRow({
       const created = await addSaleEntry({
         workerId,
         entryDate: date,
-        clientId,
+        clientId: clientId || null,
         section,
         buyerUsername,
         saleTypeId,
@@ -241,7 +245,7 @@ function AddEntryRow({
   return (
     <div className="entry-section">
       <h4>Add entry</h4>
-      <div className="entry-add-row">
+      <div className="calendar-entry-row">
         <select value={workerId} onChange={(event) => setWorkerId(event.target.value)}>
           {workers.length === 0 && <option value="">No workers</option>}
           {workers.map((worker) => (
@@ -250,14 +254,7 @@ function AddEntryRow({
             </option>
           ))}
         </select>
-        <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
-          {clients.length === 0 && <option value="">No clients</option>}
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name}
-            </option>
-          ))}
-        </select>
+        <ClientSelect value={clientId} clients={clients} onChange={setClientId} />
         <select value={section} onChange={(event) => setSection(event.target.value as SaleSection)}>
           {sections.map((value) => (
             <option key={value} value={value}>
@@ -288,12 +285,7 @@ function AddEntryRow({
             ? `Net ${formatCurrency(previewNet)} · Earnings ${formatCurrency(previewEarnings)}`
             : ''}
         </span>
-        <button
-          type="button"
-          className="btn-outline"
-          onClick={handleAdd}
-          disabled={saving || workers.length === 0 || clients.length === 0 || saleTypes.length === 0}
-        >
+        <button type="button" className="btn-outline" onClick={handleAdd} disabled={saving || workers.length === 0 || saleTypes.length === 0}>
           {saving ? 'Adding…' : 'Add'}
         </button>
       </div>
@@ -329,7 +321,7 @@ export function CalendarDayModal({
   const workerLabel = (id: string) => workers.find((worker) => worker.id === id)?.full_name ?? 'Unknown worker'
 
   return (
-    <Modal title={date} onClose={onClose}>
+    <Modal title={date} onClose={onClose} wide>
       <div className="detail-summary">
         <div>
           <p className="label">Day total</p>
@@ -375,8 +367,8 @@ export function CalendarDayModal({
         </table>
       </div>
 
-      {activeClients.length === 0 || workers.length === 0 ? (
-        <p className="info-text">Add a worker and a client first to log entries here.</p>
+      {workers.length === 0 ? (
+        <p className="info-text">Add a worker first to log entries here.</p>
       ) : (
         <AddEntryRow date={date} workers={workers} clients={activeClients} saleTypes={activeSaleTypes} onEntryAdded={onEntryAdded} />
       )}

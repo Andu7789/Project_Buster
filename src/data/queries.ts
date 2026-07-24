@@ -309,7 +309,7 @@ export async function listSaleEntriesForWorker(workerId: string, weekStart: stri
 export async function addSaleEntry(input: {
   workerId: string
   entryDate: string
-  clientId: string
+  clientId: string | null
   section: SaleSection
   buyerUsername: string
   saleTypeId: string
@@ -342,7 +342,7 @@ export async function addSaleEntry(input: {
 export async function updateSaleEntry(
   entryId: string,
   input: {
-    clientId: string
+    clientId: string | null
     section: SaleSection
     buyerUsername: string
     saleTypeId: string

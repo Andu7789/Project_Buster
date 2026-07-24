@@ -27,7 +27,7 @@ function buildBreakdown(entries: SaleEntry[], clients: Client[]): BreakdownRow[]
       continue
     }
     rows.set(key, {
-      clientName: clients.find((c) => c.id === entry.client_id)?.name ?? 'Unknown client',
+      clientName: entry.client_id ? clients.find((c) => c.id === entry.client_id)?.name ?? 'Unknown client' : 'General',
       section: entry.section,
       gross: entry.gross,
       net: entry.net,

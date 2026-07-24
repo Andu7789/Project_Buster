@@ -1,6 +1,16 @@
 import { useEffect, type ReactNode } from 'react'
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  wide,
+}: {
+  title: string
+  onClose: () => void
+  children: ReactNode
+  wide?: boolean
+}) {
   useEffect(() => {
     function handleKey(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose()
@@ -12,7 +22,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   return (
     <div className="modal-overlay" role="presentation" onClick={onClose}>
       <div
-        className="modal-panel"
+        className={`modal-panel ${wide ? 'modal-panel-wide' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

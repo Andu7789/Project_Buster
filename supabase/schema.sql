@@ -50,7 +50,7 @@ create table if not exists buster_sale_entries (
   id uuid primary key default gen_random_uuid(),
   worker_id uuid not null references buster_profiles(id),
   entry_date date not null,
-  client_id uuid not null references buster_clients(id),
+  client_id uuid references buster_clients(id),
   section text not null check (section in ('sexting', 'customs')),
   buyer_username text not null,
   sale_type_id uuid not null references buster_sale_types(id),
@@ -59,6 +59,10 @@ create table if not exists buster_sale_entries (
   earnings numeric not null,
   created_at timestamptz not null default now()
 );
+
+-- Migration: allow "General" entries that aren't tied to a client. Safe to
+-- re-run - dropping a constraint that's already gone is a no-op in Postgres.
+alter table buster_sale_entries alter column client_id drop not null;
 
 create table if not exists buster_client_invoices (
   id uuid primary key default gen_random_uuid(),

@@ -38,7 +38,7 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
   }, [gridDates, rangeKey])
 
   const workerName = (id: string) => workers.find((worker) => worker.id === id)?.full_name ?? 'Unknown worker'
-  const clientName = (id: string) => clients.find((client) => client.id === id)?.name ?? 'Unknown client'
+  const clientName = (id: string | null) => (id ? clients.find((client) => client.id === id)?.name ?? 'Unknown client' : 'General')
 
   const filteredEntries = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()

@@ -571,7 +571,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
             />
           )}
 
-          {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} />}
+          {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} saleTypes={saleTypes} />}
         </>
       )}
 

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listSaleEntriesForRange } from '../../data/queries'
 import { daysOfWeek, formatCurrency, formatMonthLabel, getMonthGridDates, toISODate } from '../../lib/dates'
-import type { Client, Profile, SaleEntry } from '../../types'
-import { Modal } from '../../components/Modal'
+import type { Client, Profile, SaleEntry, SaleType } from '../../types'
+import { CalendarDayModal } from '../../components/CalendarDayModal'
 
-export function CalendarTab({ workers, clients }: { workers: Profile[]; clients: Client[] }) {
+export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[]; clients: Client[]; saleTypes: SaleType[] }) {
   const [monthCursor, setMonthCursor] = useState(() => new Date())
   const [entries, setEntries] = useState<SaleEntry[]>([])
   const [loadedRangeKey, setLoadedRangeKey] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
 
   const gridDates = useMemo(() => getMonthGridDates(monthCursor), [monthCursor])
   const rangeKey = `${gridDates[0]}_${gridDates[gridDates.length - 1]}`
@@ -36,26 +37,53 @@ export function CalendarTab({ workers, clients }: { workers: Profile[]; clients:
     }
   }, [gridDates, rangeKey])
 
+  const workerName = (id: string) => workers.find((worker) => worker.id === id)?.full_name ?? 'Unknown worker'
+  const clientName = (id: string) => clients.find((client) => client.id === id)?.name ?? 'Unknown client'
+
+  const filteredEntries = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    if (!term) return entries
+    return entries.filter((entry) => {
+      return (
+        entry.buyer_username.toLowerCase().includes(term) ||
+        workerName(entry.worker_id).toLowerCase().includes(term) ||
+        clientName(entry.client_id).toLowerCase().includes(term)
+      )
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, searchTerm, workers, clients])
+
   const entriesByDate = useMemo(() => {
     const map = new Map<string, SaleEntry[]>()
-    for (const entry of entries) {
+    for (const entry of filteredEntries) {
       const list = map.get(entry.entry_date) ?? []
       list.push(entry)
       map.set(entry.entry_date, list)
     }
     return map
-  }, [entries])
+  }, [filteredEntries])
 
   const selectedDayEntries = selectedDay ? entriesByDate.get(selectedDay) ?? [] : []
-  const workerName = (id: string) => workers.find((worker) => worker.id === id)?.full_name ?? 'Unknown worker'
-  const clientName = (id: string) => clients.find((client) => client.id === id)?.name ?? 'Unknown client'
+  const isSearching = searchTerm.trim() !== ''
+
+  function handleEntryAdded(entry: SaleEntry) {
+    setEntries((previous) => [...previous, entry])
+  }
+
+  function handleEntryUpdated(entry: SaleEntry) {
+    setEntries((previous) => previous.map((existing) => (existing.id === entry.id ? entry : existing)))
+  }
+
+  function handleEntryDeleted(entryId: string) {
+    setEntries((previous) => previous.filter((entry) => entry.id !== entryId))
+  }
 
   return (
     <section className="panel">
       <div className="panel-head">
         <div>
           <h2>Calendar</h2>
-          <p>Daily sales across the whole team. Click a day for details.</p>
+          <p>Daily sales across the whole team. Click a day to add, amend, or delete entries.</p>
         </div>
         <div className="calendar-nav">
           <button
@@ -79,6 +107,15 @@ export function CalendarTab({ workers, clients }: { workers: Profile[]; clients:
         </div>
       </div>
 
+      <input
+        type="search"
+        className="calendar-search"
+        placeholder="Search by worker, client, or username…"
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        aria-label="Search calendar entries"
+      />
+
       {loading ? (
         <p className="info-text">Loading calendar…</p>
       ) : loadError ? (
@@ -95,11 +132,12 @@ export function CalendarTab({ workers, clients }: { workers: Profile[]; clients:
               const dayEntries = entriesByDate.get(date) ?? []
               const total = dayEntries.reduce((sum, entry) => sum + entry.gross, 0)
               const inCurrentMonth = new Date(date).getMonth() === currentMonthIndex
+              const muted = !inCurrentMonth || (isSearching && dayEntries.length === 0)
               return (
                 <button
                   key={date}
                   type="button"
-                  className={`calendar-cell ${inCurrentMonth ? '' : 'calendar-cell-muted'} ${
+                  className={`calendar-cell ${muted ? 'calendar-cell-muted' : ''} ${
                     date === todayIso ? 'calendar-cell-today' : ''
                   }`}
                   onClick={() => setSelectedDay(date)}
@@ -114,43 +152,17 @@ export function CalendarTab({ workers, clients }: { workers: Profile[]; clients:
       )}
 
       {selectedDay && (
-        <Modal title={selectedDay} onClose={() => setSelectedDay(null)}>
-          <div className="table-wrapper">
-            <table className="submission-table">
-              <thead>
-                <tr>
-                  <th>Worker</th>
-                  <th>Client</th>
-                  <th>Section</th>
-                  <th>Buyer</th>
-                  <th>Gross</th>
-                  <th>Net</th>
-                  <th>Earnings</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedDayEntries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{workerName(entry.worker_id)}</td>
-                    <td>{clientName(entry.client_id)}</td>
-                    <td>{entry.section}</td>
-                    <td>{entry.buyer_username}</td>
-                    <td>{formatCurrency(entry.gross)}</td>
-                    <td>{formatCurrency(entry.net)}</td>
-                    <td>{formatCurrency(entry.earnings)}</td>
-                  </tr>
-                ))}
-                {selectedDayEntries.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="empty-row">
-                      No entries for this day.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Modal>
+        <CalendarDayModal
+          date={selectedDay}
+          workers={workers}
+          clients={clients}
+          saleTypes={saleTypes}
+          entries={selectedDayEntries}
+          onEntryAdded={handleEntryAdded}
+          onEntryUpdated={handleEntryUpdated}
+          onEntryDeleted={handleEntryDeleted}
+          onClose={() => setSelectedDay(null)}
+        />
       )}
     </section>
   )

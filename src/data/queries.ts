@@ -339,6 +339,39 @@ export async function addSaleEntry(input: {
   return data as SaleEntry
 }
 
+export async function updateSaleEntry(
+  entryId: string,
+  input: {
+    clientId: string
+    section: SaleSection
+    buyerUsername: string
+    saleTypeId: string
+    gross: number
+  },
+): Promise<SaleEntry> {
+  const client = requireClient()
+  const net = calcNet(input.gross)
+  const earnings = calcEarnings(net, input.section)
+
+  const { data, error } = await client
+    .from('buster_sale_entries')
+    .update({
+      client_id: input.clientId,
+      section: input.section,
+      buyer_username: input.buyerUsername.trim(),
+      sale_type_id: input.saleTypeId,
+      gross: input.gross,
+      net,
+      earnings,
+    })
+    .eq('id', entryId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as SaleEntry
+}
+
 export async function deleteSaleEntry(entryId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_sale_entries').delete().eq('id', entryId)

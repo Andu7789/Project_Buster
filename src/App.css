@@ -934,6 +934,11 @@ a:focus-visible {
   gap: 10px;
 }
 
+.calendar-search {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
 .calendar-weekday-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);

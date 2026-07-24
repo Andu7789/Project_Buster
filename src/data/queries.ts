@@ -345,18 +345,21 @@ export async function deleteSaleEntry(entryId: string): Promise<void> {
   if (error) throw error
 }
 
-export async function listSaleEntriesForWeek(weekStart: string, weekEnd: string): Promise<SaleEntry[]> {
+export async function listSaleEntriesForRange(startDate: string, endDate: string): Promise<SaleEntry[]> {
   const client = requireClient()
   const { data, error } = await client
     .from('buster_sale_entries')
     .select('*')
-    .gte('entry_date', weekStart)
-    .lte('entry_date', weekEnd)
+    .gte('entry_date', startDate)
+    .lte('entry_date', endDate)
     .order('created_at', { ascending: true })
 
   if (error) throw error
   return (data ?? []) as SaleEntry[]
 }
+
+/** Alias kept for existing week-scoped call sites. */
+export const listSaleEntriesForWeek = listSaleEntriesForRange
 
 export async function listClientInvoices(): Promise<ClientInvoice[]> {
   const client = requireClient()

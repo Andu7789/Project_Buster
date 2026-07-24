@@ -15,7 +15,7 @@ export function formatDayLabel(day: string, isoDate: string): string {
   return `${day}, ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
 }
 
-function toISODate(date: Date): string {
+export function toISODate(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -43,4 +43,32 @@ export function formatWeekRange(weekStart: string, weekEnd: string): string {
 
 export function formatCurrency(amount: number): string {
   return `£${amount.toFixed(2)}`
+}
+
+/**
+ * Returns the Monday-first calendar grid (as ISO date strings) covering `reference`'s month,
+ * padded with leading/trailing days from adjacent months so every row is a full week.
+ */
+export function getMonthGridDates(reference: Date): string[] {
+  const year = reference.getFullYear()
+  const month = reference.getMonth()
+  const firstOfMonth = new Date(year, month, 1)
+  const firstWeekday = (firstOfMonth.getDay() + 6) % 7
+  const gridStart = new Date(firstOfMonth)
+  gridStart.setDate(firstOfMonth.getDate() - firstWeekday)
+
+  const lastOfMonth = new Date(year, month + 1, 0)
+  const lastWeekday = (lastOfMonth.getDay() + 6) % 7
+  const totalDays = firstWeekday + lastOfMonth.getDate() + (6 - lastWeekday)
+  const weeks = Math.ceil(totalDays / 7)
+
+  return Array.from({ length: weeks * 7 }, (_, index) => {
+    const date = new Date(gridStart)
+    date.setDate(gridStart.getDate() + index)
+    return toISODate(date)
+  })
+}
+
+export function formatMonthLabel(reference: Date): string {
+  return reference.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 }

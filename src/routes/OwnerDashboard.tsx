@@ -23,35 +23,19 @@ import {
   setSaleTypeActive,
   updateWorkerShare,
 } from '../data/queries'
-import { formatCurrency, formatWeekRange, getCurrentWeekRange } from '../lib/dates'
-import { calcClientPayout, calcOwnerCut } from '../lib/earnings'
-import type {
-  Client,
-  ClientInvoice,
-  Profile,
-  ProfileStatus,
-  SaleEntry,
-  SaleSection,
-  SaleType,
-  Submission,
-  TrainingProgress,
-} from '../types'
+import { formatCurrency, getCurrentWeekRange } from '../lib/dates'
+import { calcOwnerCut, clientPayoutTotal } from '../lib/earnings'
+import type { Client, ClientInvoice, Profile, ProfileStatus, SaleEntry, SaleSection, SaleType, Submission, TrainingProgress } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { StatCard } from '../components/StatCard'
-import { ProfileStatusBadge, SubmissionStatusBadge } from '../components/StatusBadge'
 import { SubmissionInvoiceModal } from '../components/SubmissionInvoiceModal'
 import { ClientInvoiceModal } from '../components/ClientInvoiceModal'
 import { WeekTrendChart } from '../components/WeekTrendChart'
-import { TRAINING_MODULE_COUNT, TRAINING_MODULE_TITLES } from '../lib/trainingContent'
-
-function clientPayoutTotal(entries: SaleEntry[]): number {
-  const netBySection: Record<SaleSection, number> = { sexting: 0, customs: 0 }
-  for (const entry of entries) netBySection[entry.section] += entry.net
-  return (Object.keys(netBySection) as SaleSection[]).reduce(
-    (sum, section) => sum + calcClientPayout(netBySection[section], section),
-    0,
-  )
-}
+import { TabNav, type OwnerTabId } from './OwnerDashboard/TabNav'
+import { TeamClientsSaleTypesTab } from './OwnerDashboard/TeamClientsSaleTypesTab'
+import { LearnersTrainingTab } from './OwnerDashboard/LearnersTrainingTab'
+import { SubmissionsInvoicesTab } from './OwnerDashboard/SubmissionsInvoicesTab'
+import { CalendarTab } from './OwnerDashboard/CalendarTab'
 
 export function OwnerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
@@ -66,6 +50,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<OwnerTabId>('team')
 
   const { weekStart: currentWeekStart, weekEnd: currentWeekEnd } = useMemo(() => getCurrentWeekRange(), [])
 
@@ -505,523 +490,88 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
             )}
           </section>
 
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Team</h2>
-                <p>Onboard workers and manage access.</p>
-              </div>
-            </div>
+          <TabNav active={activeTab} onChange={setActiveTab} />
 
-            <form className="add-worker-form" onSubmit={handleAddWorker}>
-              <label>
-                Full name
-                <input value={newWorkerName} onChange={(event) => setNewWorkerName(event.target.value)} placeholder="Jordan Lee" />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={newWorkerEmail}
-                  onChange={(event) => setNewWorkerEmail(event.target.value)}
-                  placeholder="jordan@example.com"
-                />
-              </label>
-              <label>
-                Owner share %
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={newWorkerShare}
-                  onChange={(event) => setNewWorkerShare(event.target.value)}
-                />
-              </label>
-              <button type="submit" className="btn-primary" disabled={adding}>
-                {adding ? 'Adding…' : 'Add worker'}
-              </button>
-            </form>
-            {addError && <p className="message message-error">{addError}</p>}
-            {addMessage && <p className="message message-info">{addMessage}</p>}
+          {activeTab === 'team' && (
+            <TeamClientsSaleTypesTab
+              workers={workers}
+              editingShareId={editingShareId}
+              shareDraft={shareDraft}
+              shareError={shareError}
+              rosterError={rosterError}
+              newWorkerName={newWorkerName}
+              newWorkerEmail={newWorkerEmail}
+              newWorkerShare={newWorkerShare}
+              adding={adding}
+              addError={addError}
+              addMessage={addMessage}
+              onNewWorkerNameChange={setNewWorkerName}
+              onNewWorkerEmailChange={setNewWorkerEmail}
+              onNewWorkerShareChange={setNewWorkerShare}
+              onAddWorker={handleAddWorker}
+              onStartEditShare={startEditShare}
+              onShareDraftChange={setShareDraft}
+              onSaveShare={handleSaveShare}
+              onCancelEditShare={() => setEditingShareId(null)}
+              onStatusChange={handleStatusChange}
+              onRemove={handleRemove}
+              onDeleteWorker={handleDeleteWorker}
+              clients={clients}
+              newClientName={newClientName}
+              addingClient={addingClient}
+              clientError={clientError}
+              onNewClientNameChange={setNewClientName}
+              onAddClient={handleAddClient}
+              onToggleClient={handleToggleClient}
+              saleTypes={saleTypes}
+              newSaleTypeLabel={newSaleTypeLabel}
+              addingSaleType={addingSaleType}
+              saleTypeError={saleTypeError}
+              onNewSaleTypeLabelChange={setNewSaleTypeLabel}
+              onAddSaleType={handleAddSaleType}
+              onToggleSaleType={handleToggleSaleType}
+            />
+          )}
 
-            <div className="table-wrapper">
-              <table className="submission-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Owner share</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workers.map((worker) => (
-                    <tr key={worker.id}>
-                      <td>{worker.full_name}</td>
-                      <td>{worker.email}</td>
-                      <td>
-                        {editingShareId === worker.id ? (
-                          <div className="share-edit">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="share-edit-input"
-                              value={shareDraft}
-                              onChange={(event) => setShareDraft(event.target.value)}
-                              autoFocus
-                            />
-                            <button type="button" className="link-btn" onClick={() => handleSaveShare(worker.id)}>
-                              Save
-                            </button>
-                            <button type="button" className="link-btn" onClick={() => setEditingShareId(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button type="button" className="share-value" onClick={() => startEditShare(worker)}>
-                            {worker.owner_share_percent}%
-                          </button>
-                        )}
-                      </td>
-                      <td>
-                        <ProfileStatusBadge status={worker.status} />
-                      </td>
-                      <td className="roster-actions">
-                        {worker.status === 'active' && (
-                          <button type="button" className="btn-outline" onClick={() => handleStatusChange(worker.id, 'suspended')}>
-                            Suspend
-                          </button>
-                        )}
-                        {worker.status === 'suspended' && (
-                          <button type="button" className="btn-outline" onClick={() => handleStatusChange(worker.id, 'active')}>
-                            Reactivate
-                          </button>
-                        )}
-                        {worker.status !== 'removed' && (
-                          <button type="button" className="btn-danger" onClick={() => handleRemove(worker)}>
-                            Remove
-                          </button>
-                        )}
-                        {worker.status === 'removed' && (
-                          <button type="button" className="btn-danger" onClick={() => handleDeleteWorker(worker)}>
-                            Delete permanently
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {workers.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="empty-row">
-                        No workers yet — add your first one above.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {rosterError && <p className="message message-error">{rosterError}</p>}
-            {shareError && <p className="message message-error">{shareError}</p>}
-          </section>
+          {activeTab === 'learners' && (
+            <LearnersTrainingTab
+              learners={learners}
+              newLearnerName={newLearnerName}
+              newLearnerEmail={newLearnerEmail}
+              addingLearner={addingLearner}
+              addLearnerError={addLearnerError}
+              addLearnerMessage={addLearnerMessage}
+              learnerRosterError={learnerRosterError}
+              onNewLearnerNameChange={setNewLearnerName}
+              onNewLearnerEmailChange={setNewLearnerEmail}
+              onAddLearner={handleAddLearner}
+              onLearnerStatusChange={handleLearnerStatusChange}
+              onRemoveLearner={handleRemoveLearner}
+              onDeleteLearner={handleDeleteLearner}
+              progressByLearner={progressByLearner}
+            />
+          )}
 
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Clients</h2>
-                <p>Clients configured here appear in every worker's day-entry modal.</p>
-              </div>
-            </div>
+          {activeTab === 'submissions' && (
+            <SubmissionsInvoicesTab
+              workers={workers}
+              submissions={submissions}
+              selectedWorkerId={selectedWorkerId}
+              selectedWorker={selectedWorker}
+              selectedWorkerSubmissions={selectedWorkerSubmissions}
+              onSelectWorker={setSelectedWorkerId}
+              onSelectSubmission={setSelectedSubmissionId}
+              activeClients={activeClients}
+              clients={clients}
+              weekEntries={weekEntries}
+              clientInvoices={clientInvoices}
+              currentWeekStart={currentWeekStart}
+              selectedClientId={selectedClientId}
+              onSelectClient={setSelectedClientId}
+            />
+          )}
 
-            <form className="add-worker-form" onSubmit={handleAddClient}>
-              <label>
-                Client name
-                <input value={newClientName} onChange={(event) => setNewClientName(event.target.value)} placeholder="Sav" />
-              </label>
-              <button type="submit" className="btn-primary" disabled={addingClient}>
-                {addingClient ? 'Adding…' : 'Add client'}
-              </button>
-            </form>
-            {clientError && <p className="message message-error">{clientError}</p>}
-
-            <div className="table-wrapper">
-              <table className="submission-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.map((clientRow) => (
-                    <tr key={clientRow.id}>
-                      <td>{clientRow.name}</td>
-                      <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
-                      <td className="roster-actions">
-                        <button type="button" className="btn-outline" onClick={() => handleToggleClient(clientRow)}>
-                          {clientRow.active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {clients.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="empty-row">
-                        No clients yet — add your first one above.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Sale types</h2>
-                <p>Types configured here populate the Type dropdown for every entry a worker adds.</p>
-              </div>
-            </div>
-
-            <form className="add-worker-form" onSubmit={handleAddSaleType}>
-              <label>
-                Type name
-                <input
-                  value={newSaleTypeLabel}
-                  onChange={(event) => setNewSaleTypeLabel(event.target.value)}
-                  placeholder="Unlock"
-                />
-              </label>
-              <button type="submit" className="btn-primary" disabled={addingSaleType}>
-                {addingSaleType ? 'Adding…' : 'Add type'}
-              </button>
-            </form>
-            {saleTypeError && <p className="message message-error">{saleTypeError}</p>}
-
-            <div className="table-wrapper">
-              <table className="submission-table">
-                <thead>
-                  <tr>
-                    <th>Label</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {saleTypes.map((saleType) => (
-                    <tr key={saleType.id}>
-                      <td>{saleType.label}</td>
-                      <td>{saleType.active ? 'Active' : 'Inactive'}</td>
-                      <td className="roster-actions">
-                        <button type="button" className="btn-outline" onClick={() => handleToggleSaleType(saleType)}>
-                          {saleType.active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {saleTypes.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="empty-row">
-                        No types yet — add your first one above.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Learners</h2>
-                <p>Give someone access to the training portal.</p>
-              </div>
-            </div>
-
-            <form className="add-worker-form" onSubmit={handleAddLearner}>
-              <label>
-                Full name
-                <input value={newLearnerName} onChange={(event) => setNewLearnerName(event.target.value)} placeholder="Jordan Lee" />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={newLearnerEmail}
-                  onChange={(event) => setNewLearnerEmail(event.target.value)}
-                  placeholder="jordan@example.com"
-                />
-              </label>
-              <button type="submit" className="btn-primary" disabled={addingLearner}>
-                {addingLearner ? 'Adding…' : 'Add learner'}
-              </button>
-            </form>
-            {addLearnerError && <p className="message message-error">{addLearnerError}</p>}
-            {addLearnerMessage && <p className="message message-info">{addLearnerMessage}</p>}
-
-            <div className="table-wrapper">
-              <table className="submission-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {learners.map((learner) => (
-                    <tr key={learner.id}>
-                      <td>{learner.full_name}</td>
-                      <td>{learner.email}</td>
-                      <td>
-                        <ProfileStatusBadge status={learner.status} />
-                      </td>
-                      <td className="roster-actions">
-                        {learner.status === 'active' && (
-                          <button type="button" className="btn-outline" onClick={() => handleLearnerStatusChange(learner.id, 'suspended')}>
-                            Suspend
-                          </button>
-                        )}
-                        {learner.status === 'suspended' && (
-                          <button type="button" className="btn-outline" onClick={() => handleLearnerStatusChange(learner.id, 'active')}>
-                            Reactivate
-                          </button>
-                        )}
-                        {learner.status !== 'removed' && (
-                          <button type="button" className="btn-danger" onClick={() => handleRemoveLearner(learner)}>
-                            Remove
-                          </button>
-                        )}
-                        {learner.status === 'removed' && (
-                          <button type="button" className="btn-danger" onClick={() => handleDeleteLearner(learner)}>
-                            Delete permanently
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {learners.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="empty-row">
-                        No learners yet — add your first one above.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {learnerRosterError && <p className="message message-error">{learnerRosterError}</p>}
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Training progress</h2>
-                <p>How far each learner has gotten through the onboarding track.</p>
-              </div>
-            </div>
-
-            <div className="table-wrapper">
-              <table className="submission-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Progress</th>
-                    <th>Modules completed</th>
-                    <th>Last activity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {learners
-                    .filter((learner) => learner.status !== 'removed')
-                    .map((learner) => {
-                      const rows = progressByLearner.get(learner.id) ?? []
-                      const pct = Math.round((rows.length / TRAINING_MODULE_COUNT) * 100)
-                      const lastActivity = rows
-                        .map((row) => row.completed_at)
-                        .sort()
-                        .at(-1)
-                      return (
-                        <tr key={learner.id}>
-                          <td>{learner.full_name}</td>
-                          <td>
-                            <div className="progress-cell">
-                              <div className="progress-cell-track">
-                                <div className="progress-cell-fill" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span>{pct}%</span>
-                            </div>
-                          </td>
-                          <td>
-                            {rows.length === 0
-                              ? '—'
-                              : `${rows.length}/${TRAINING_MODULE_COUNT} — ${rows
-                                  .map((row) => TRAINING_MODULE_TITLES[row.module_id] ?? row.module_id)
-                                  .join(', ')}`}
-                          </td>
-                          <td>{lastActivity ? new Date(lastActivity).toLocaleDateString('en-GB') : 'Not started'}</td>
-                        </tr>
-                      )
-                    })}
-                  {learners.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="empty-row">
-                        No learners yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Submissions</h2>
-                <p>Select a worker to review their weekly timesheets and mark invoices.</p>
-              </div>
-            </div>
-
-            <div className="worker-cards">
-              {workers
-                .filter((worker) => worker.status !== 'removed')
-                .map((worker) => {
-                  const workerTotal = submissions
-                    .filter((submission) => submission.worker_id === worker.id)
-                    .reduce((sum, submission) => sum + submission.amount, 0)
-                  const workerPending = submissions.filter(
-                    (submission) => submission.worker_id === worker.id && !submission.dealt_with,
-                  ).length
-
-                  return (
-                    <article
-                      key={worker.id}
-                      className={`worker-card ${worker.id === selectedWorkerId ? 'selected' : ''}`}
-                      onClick={() => setSelectedWorkerId(worker.id)}
-                    >
-                      <strong>{worker.full_name}</strong>
-                      <p>Total submitted: {formatCurrency(workerTotal)}</p>
-                      <p className={workerPending > 0 ? 'text-danger' : undefined}>
-                        {workerPending} pending submission{workerPending === 1 ? '' : 's'}
-                      </p>
-                    </article>
-                  )
-                })}
-            </div>
-
-            {selectedWorker ? (
-              <div className="stack">
-                <div className="table-header">
-                  <h3>{selectedWorker.full_name}</h3>
-                  <p>Click a row to see daily amounts and create an invoice.</p>
-                </div>
-                <div className="table-wrapper">
-                  <table className="submission-table">
-                    <thead>
-                      <tr>
-                        <th>Week</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedWorkerSubmissions.map((submission) => (
-                        <tr key={submission.id} className="submission-row" onClick={() => setSelectedSubmissionId(submission.id)}>
-                          <td>{formatWeekRange(submission.week_start, submission.week_end)}</td>
-                          <td>{formatCurrency(submission.amount)}</td>
-                          <td>
-                            <SubmissionStatusBadge dealtWith={submission.dealt_with} />
-                          </td>
-                        </tr>
-                      ))}
-                      {selectedWorkerSubmissions.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="empty-row">
-                            No submissions yet
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <p className="info-text">Select a worker card to view their weekly submissions.</p>
-            )}
-          </section>
-
-          <section className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Client invoices</h2>
-                <p>This week's sales per client — create and send their weekly payout invoice.</p>
-              </div>
-            </div>
-
-            <div className="worker-cards">
-              {activeClients.map((client) => {
-                const entries = weekEntries.filter((entry) => entry.client_id === client.id)
-                const invoice = clientInvoices.find(
-                  (inv) => inv.client_id === client.id && inv.week_start === currentWeekStart,
-                )
-                return (
-                  <article
-                    key={client.id}
-                    className={`worker-card ${client.id === selectedClientId ? 'selected' : ''}`}
-                    onClick={() => setSelectedClientId(client.id)}
-                  >
-                    <strong>{client.name}</strong>
-                    <p>Client payout: {formatCurrency(clientPayoutTotal(entries))}</p>
-                    <p className={invoice?.dealt_with ? undefined : 'text-danger'}>
-                      {invoice?.dealt_with ? 'Invoiced' : 'Not yet invoiced'}
-                    </p>
-                  </article>
-                )
-              })}
-              {activeClients.length === 0 && <p className="info-text">No active clients yet.</p>}
-            </div>
-
-            <div className="table-header">
-              <h3>Invoice history</h3>
-            </div>
-            <div className="table-wrapper">
-              <table className="submission-table">
-                <thead>
-                  <tr>
-                    <th>Client</th>
-                    <th>Week</th>
-                    <th>Client payout</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientInvoices.map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td>{clients.find((c) => c.id === invoice.client_id)?.name ?? 'Unknown client'}</td>
-                      <td>{formatWeekRange(invoice.week_start, invoice.week_end)}</td>
-                      <td>{formatCurrency(invoice.client_payout)}</td>
-                      <td>
-                        <SubmissionStatusBadge dealtWith={invoice.dealt_with} />
-                      </td>
-                    </tr>
-                  ))}
-                  {clientInvoices.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="empty-row">
-                        No client invoices yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} />}
         </>
       )}
 

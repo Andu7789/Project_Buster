@@ -13,6 +13,8 @@ import { PortalHeader } from '../components/PortalHeader'
 import { SubmissionStatusBadge } from '../components/StatusBadge'
 import { Modal } from '../components/Modal'
 import { DayEntryModal } from '../components/DayEntryModal'
+import { HoverEffectGrid } from '../components/HoverEffect/HoverEffectGrid'
+import { HoverEffectItem } from '../components/HoverEffect/HoverEffectItem'
 
 export function WorkerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
@@ -136,22 +138,23 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         )}
 
         <div className="stack">
-          <div className="day-grid">
+          <HoverEffectGrid className="day-grid">
             {daysOfWeek.map((day, index) => {
               const date = weekDates[index]
               return (
-                <button
-                  key={day}
-                  type="button"
-                  className="day-card day-card-clickable"
-                  onClick={() => setSelectedDate(date)}
-                >
-                  <span>{day}</span>
-                  <strong>{formatCurrency(totalsByDate.get(date) ?? 0)}</strong>
-                </button>
+                <HoverEffectItem key={day} index={index}>
+                  <button
+                    type="button"
+                    className="day-card day-card-clickable"
+                    onClick={() => setSelectedDate(date)}
+                  >
+                    <span>{day}</span>
+                    <strong>{formatCurrency(totalsByDate.get(date) ?? 0)}</strong>
+                  </button>
+                </HoverEffectItem>
               )
             })}
-          </div>
+          </HoverEffectGrid>
 
           <div className="summary-card">
             <strong>Current week total</strong>

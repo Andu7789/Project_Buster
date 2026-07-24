@@ -1032,15 +1032,74 @@ a:focus-visible {
 }
 
 .calendar-cell-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ink-muted);
+}
+
+.calendar-cell-reminder-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex-shrink: 0;
 }
 
 .calendar-cell-total {
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--accent-ink);
+}
+
+.reminder-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reminder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.reminder-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reminder-row-text span {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.reminder-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-add-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.reminder-add-row input {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
 @media (max-width: 640px) {

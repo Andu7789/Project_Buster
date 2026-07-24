@@ -1,12 +1,137 @@
 import { useState } from 'react'
 import { Modal } from './Modal'
-import { addSaleEntry, deleteSaleEntry, updateSaleEntry } from '../data/queries'
+import { addCalendarEvent, addSaleEntry, deleteCalendarEvent, deleteSaleEntry, updateCalendarEvent, updateSaleEntry } from '../data/queries'
 import { calcEarnings, calcNet, sectionLabel } from '../lib/earnings'
 import { formatCurrency } from '../lib/dates'
-import type { Client, Profile, SaleEntry, SaleSection, SaleType } from '../types'
+import type { CalendarEvent, Client, Profile, SaleEntry, SaleSection, SaleType } from '../types'
 
 const sections: SaleSection[] = ['sexting', 'customs']
 const GENERAL_CLIENT_VALUE = ''
+
+function ReminderRow({
+  event,
+  onEventUpdated,
+  onEventDeleted,
+}: {
+  event: CalendarEvent
+  onEventUpdated: (event: CalendarEvent) => void
+  onEventDeleted: (eventId: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(event.title)
+  const [notes, setNotes] = useState(event.notes ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  function startEdit() {
+    setTitle(event.title)
+    setNotes(event.notes ?? '')
+    setError(null)
+    setEditing(true)
+  }
+
+  async function handleSave() {
+    setError(null)
+    if (!title.trim()) {
+      setError('Enter a title.')
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateCalendarEvent(event.id, { title, notes })
+      onEventUpdated(updated)
+      setEditing(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this reminder.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    const confirmed = window.confirm('Delete this reminder?')
+    if (!confirmed) return
+    try {
+      await deleteCalendarEvent(event.id)
+      onEventDeleted(event.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove this reminder.')
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="reminder-row">
+        <input placeholder="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
+        <input placeholder="Notes (optional)" value={notes} onChange={(event) => setNotes(event.target.value)} />
+        <div className="roster-actions">
+          <button type="button" className="btn-outline" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" className="link-btn" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        </div>
+        {error && <p className="message message-error">{error}</p>}
+      </li>
+    )
+  }
+
+  return (
+    <li className="reminder-row">
+      <div className="reminder-row-text">
+        <strong>{event.title}</strong>
+        {event.notes && <span>{event.notes}</span>}
+      </div>
+      <div className="roster-actions">
+        <button type="button" className="link-btn" onClick={startEdit}>
+          Amend
+        </button>
+        <button type="button" className="link-btn text-danger" onClick={handleDelete}>
+          Delete
+        </button>
+      </div>
+      {error && <p className="message message-error">{error}</p>}
+    </li>
+  )
+}
+
+function AddReminderRow({ date, onEventAdded }: { date: string; onEventAdded: (event: CalendarEvent) => void }) {
+  const [title, setTitle] = useState('')
+  const [notes, setNotes] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  async function handleAdd() {
+    setError(null)
+    if (!title.trim()) {
+      setError('Enter a title.')
+      return
+    }
+    setSaving(true)
+    try {
+      const created = await addCalendarEvent({ eventDate: date, title, notes })
+      onEventAdded(created)
+      setTitle('')
+      setNotes('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add this reminder.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="reminder-add-row">
+      <input placeholder="Title (e.g. Client meeting)" value={title} onChange={(event) => setTitle(event.target.value)} />
+      <input placeholder="Notes (optional)" value={notes} onChange={(event) => setNotes(event.target.value)} />
+      <button type="button" className="btn-outline" onClick={handleAdd} disabled={saving}>
+        {saving ? 'Adding…' : 'Add reminder'}
+      </button>
+      {error && <p className="message message-error">{error}</p>}
+    </div>
+  )
+}
 
 function ClientSelect({ value, clients, onChange }: { value: string; clients: Client[]; onChange: (value: string) => void }) {
   return (
@@ -300,9 +425,13 @@ export function CalendarDayModal({
   clients,
   saleTypes,
   entries,
+  events,
   onEntryAdded,
   onEntryUpdated,
   onEntryDeleted,
+  onEventAdded,
+  onEventUpdated,
+  onEventDeleted,
   onClose,
 }: {
   date: string
@@ -310,9 +439,13 @@ export function CalendarDayModal({
   clients: Client[]
   saleTypes: SaleType[]
   entries: SaleEntry[]
+  events: CalendarEvent[]
   onEntryAdded: (entry: SaleEntry) => void
   onEntryUpdated: (entry: SaleEntry) => void
   onEntryDeleted: (entryId: string) => void
+  onEventAdded: (event: CalendarEvent) => void
+  onEventUpdated: (event: CalendarEvent) => void
+  onEventDeleted: (eventId: string) => void
   onClose: () => void
 }) {
   const activeClients = clients.filter((client) => client.active)
@@ -329,6 +462,18 @@ export function CalendarDayModal({
         </div>
       </div>
 
+      <div className="entry-section">
+        <h4>Reminders</h4>
+        <ul className="reminder-list">
+          {events.map((event) => (
+            <ReminderRow key={event.id} event={event} onEventUpdated={onEventUpdated} onEventDeleted={onEventDeleted} />
+          ))}
+          {events.length === 0 && <li className="info-text">No reminders for this day.</li>}
+        </ul>
+        <AddReminderRow date={date} onEventAdded={onEventAdded} />
+      </div>
+
+      <h4>Sale entries</h4>
       <div className="table-wrapper">
         <table className="detail-table">
           <thead>

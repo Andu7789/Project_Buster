@@ -64,6 +64,17 @@ create table if not exists buster_sale_entries (
 -- re-run - dropping a constraint that's already gone is a no-op in Postgres.
 alter table buster_sale_entries alter column client_id drop not null;
 
+-- Free-standing reminders/events on a calendar day, unrelated to sale
+-- entries (e.g. "Client meeting", "Payday") - owner-only, never surfaced to
+-- workers or learners.
+create table if not exists buster_calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  event_date date not null,
+  title text not null,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists buster_client_invoices (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references buster_clients(id),
@@ -185,6 +196,7 @@ alter table buster_sale_types enable row level security;
 alter table buster_sale_entries enable row level security;
 alter table buster_client_invoices enable row level security;
 alter table buster_training_progress enable row level security;
+alter table buster_calendar_events enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -275,6 +287,13 @@ create policy "worker deletes own" on buster_sale_entries for delete
 -- (this is the owner/client-facing side of the money, not the worker's).
 drop policy if exists "owner manages" on buster_client_invoices;
 create policy "owner manages" on buster_client_invoices for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+-- buster_calendar_events policies - owner-only, same shape as
+-- buster_client_invoices above (workers/learners never see these).
+drop policy if exists "owner manages" on buster_calendar_events;
+create policy "owner manages" on buster_calendar_events for all
   using (buster_is_owner())
   with check (buster_is_owner());
 

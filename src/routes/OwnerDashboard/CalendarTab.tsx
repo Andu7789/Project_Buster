@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listSaleEntriesForRange } from '../../data/queries'
+import { listCalendarEventsForRange, listSaleEntriesForRange } from '../../data/queries'
 import { daysOfWeek, formatCurrency, formatMonthLabel, getMonthGridDates, toISODate } from '../../lib/dates'
-import type { Client, Profile, SaleEntry, SaleType } from '../../types'
+import type { CalendarEvent, Client, Profile, SaleEntry, SaleType } from '../../types'
 import { CalendarDayModal } from '../../components/CalendarDayModal'
 
 export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[]; clients: Client[]; saleTypes: SaleType[] }) {
   const [monthCursor, setMonthCursor] = useState(() => new Date())
   const [entries, setEntries] = useState<SaleEntry[]>([])
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loadedRangeKey, setLoadedRangeKey] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
@@ -20,10 +21,14 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
 
   useEffect(() => {
     let cancelled = false
-    listSaleEntriesForRange(gridDates[0], gridDates[gridDates.length - 1])
-      .then((data) => {
+    Promise.all([
+      listSaleEntriesForRange(gridDates[0], gridDates[gridDates.length - 1]),
+      listCalendarEventsForRange(gridDates[0], gridDates[gridDates.length - 1]),
+    ])
+      .then(([entryData, eventData]) => {
         if (cancelled) return
-        setEntries(data)
+        setEntries(entryData)
+        setEvents(eventData)
         setLoadError(null)
         setLoadedRangeKey(rangeKey)
       })
@@ -63,7 +68,18 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
     return map
   }, [filteredEntries])
 
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>()
+    for (const event of events) {
+      const list = map.get(event.event_date) ?? []
+      list.push(event)
+      map.set(event.event_date, list)
+    }
+    return map
+  }, [events])
+
   const selectedDayEntries = selectedDay ? entriesByDate.get(selectedDay) ?? [] : []
+  const selectedDayEvents = selectedDay ? eventsByDate.get(selectedDay) ?? [] : []
   const isSearching = searchTerm.trim() !== ''
 
   function handleEntryAdded(entry: SaleEntry) {
@@ -76,6 +92,18 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
 
   function handleEntryDeleted(entryId: string) {
     setEntries((previous) => previous.filter((entry) => entry.id !== entryId))
+  }
+
+  function handleEventAdded(event: CalendarEvent) {
+    setEvents((previous) => [...previous, event])
+  }
+
+  function handleEventUpdated(event: CalendarEvent) {
+    setEvents((previous) => previous.map((existing) => (existing.id === event.id ? event : existing)))
+  }
+
+  function handleEventDeleted(eventId: string) {
+    setEvents((previous) => previous.filter((event) => event.id !== eventId))
   }
 
   return (
@@ -130,6 +158,7 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
           <div className="calendar-grid">
             {gridDates.map((date) => {
               const dayEntries = entriesByDate.get(date) ?? []
+              const dayEvents = eventsByDate.get(date) ?? []
               const total = dayEntries.reduce((sum, entry) => sum + entry.gross, 0)
               const inCurrentMonth = new Date(date).getMonth() === currentMonthIndex
               const muted = !inCurrentMonth || (isSearching && dayEntries.length === 0)
@@ -141,8 +170,12 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
                     date === todayIso ? 'calendar-cell-today' : ''
                   }`}
                   onClick={() => setSelectedDay(date)}
+                  title={dayEvents.length > 0 ? dayEvents.map((event) => event.title).join(', ') : undefined}
                 >
-                  <span className="calendar-cell-date">{Number(date.slice(-2))}</span>
+                  <span className="calendar-cell-date">
+                    {Number(date.slice(-2))}
+                    {dayEvents.length > 0 && <span className="calendar-cell-reminder-dot" />}
+                  </span>
                   {dayEntries.length > 0 && <span className="calendar-cell-total">{formatCurrency(total)}</span>}
                 </button>
               )
@@ -158,9 +191,13 @@ export function CalendarTab({ workers, clients, saleTypes }: { workers: Profile[
           clients={clients}
           saleTypes={saleTypes}
           entries={selectedDayEntries}
+          events={selectedDayEvents}
           onEntryAdded={handleEntryAdded}
           onEntryUpdated={handleEntryUpdated}
           onEntryDeleted={handleEntryDeleted}
+          onEventAdded={handleEventAdded}
+          onEventUpdated={handleEventUpdated}
+          onEventDeleted={handleEventDeleted}
           onClose={() => setSelectedDay(null)}
         />
       )}

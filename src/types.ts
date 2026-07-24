@@ -63,6 +63,14 @@ export interface SaleEntry {
   created_at: string
 }
 
+export interface CalendarEvent {
+  id: string
+  event_date: string
+  title: string
+  notes: string | null
+  created_at: string
+}
+
 export interface ClientInvoice {
   id: string
   client_id: string

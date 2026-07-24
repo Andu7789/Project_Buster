@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { calcEarnings, calcNet } from '../lib/earnings'
 import type {
+  CalendarEvent,
   Client,
   ClientInvoice,
   Profile,
@@ -393,6 +394,57 @@ export async function listSaleEntriesForRange(startDate: string, endDate: string
 
 /** Alias kept for existing week-scoped call sites. */
 export const listSaleEntriesForWeek = listSaleEntriesForRange
+
+export async function listCalendarEventsForRange(startDate: string, endDate: string): Promise<CalendarEvent[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_calendar_events')
+    .select('*')
+    .gte('event_date', startDate)
+    .lte('event_date', endDate)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as CalendarEvent[]
+}
+
+export async function addCalendarEvent(input: { eventDate: string; title: string; notes?: string }): Promise<CalendarEvent> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_calendar_events')
+    .insert({
+      event_date: input.eventDate,
+      title: input.title.trim(),
+      notes: input.notes?.trim() || null,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as CalendarEvent
+}
+
+export async function updateCalendarEvent(eventId: string, input: { title: string; notes?: string }): Promise<CalendarEvent> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_calendar_events')
+    .update({
+      title: input.title.trim(),
+      notes: input.notes?.trim() || null,
+    })
+    .eq('id', eventId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as CalendarEvent
+}
+
+export async function deleteCalendarEvent(eventId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_calendar_events').delete().eq('id', eventId)
+  if (error) throw error
+}
 
 export async function listClientInvoices(): Promise<ClientInvoice[]> {
   const client = requireClient()

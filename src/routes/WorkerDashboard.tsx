@@ -7,7 +7,17 @@ import {
   listSubmissionsForWorker,
   submitTimesheet,
 } from '../data/queries'
-import { daysOfWeek, formatCurrency, formatDayLabel, formatWeekRange, getCurrentWeekRange, getWeekDates } from '../lib/dates'
+import {
+  daysOfWeek,
+  formatCurrency,
+  formatDayLabel,
+  formatWeekRange,
+  getCurrentWeekRange,
+  getPreviousWeekRange,
+  getWeekDates,
+  isWithinGracePeriod,
+} from '../lib/dates'
+import { earningsByClient } from '../lib/earnings'
 import type { Client, Profile, SaleEntry, SaleType, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { SubmissionStatusBadge } from '../components/StatusBadge'
@@ -22,6 +32,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   const [clients, setClients] = useState<Client[]>([])
   const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
   const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
+  const [previousWeekEntries, setPreviousWeekEntries] = useState<SaleEntry[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -32,6 +43,9 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
 
   const { weekStart, weekEnd } = useMemo(() => getCurrentWeekRange(), [])
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart])
+  const previousWeek = useMemo(() => getPreviousWeekRange(weekStart), [weekStart])
+  const previousWeekDates = useMemo(() => getWeekDates(previousWeek.weekStart), [previousWeek.weekStart])
+  const graceActive = useMemo(() => isWithinGracePeriod(), [])
 
   useEffect(() => {
     let cancelled = false
@@ -40,13 +54,17 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       listClients(),
       listSaleTypes(),
       listSaleEntriesForWorker(profile.id, weekStart, weekEnd),
+      graceActive
+        ? listSaleEntriesForWorker(profile.id, previousWeek.weekStart, previousWeek.weekEnd)
+        : Promise.resolve([]),
     ])
-      .then(([submissionData, clientData, saleTypeData, entryData]) => {
+      .then(([submissionData, clientData, saleTypeData, entryData, previousEntryData]) => {
         if (cancelled) return
         setSubmissions(submissionData)
         setClients(clientData)
         setSaleTypes(saleTypeData)
         setWeekEntries(entryData)
+        setPreviousWeekEntries(previousEntryData)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load your timesheets.')
@@ -57,9 +75,11 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     return () => {
       cancelled = true
     }
-  }, [profile.id, weekStart, weekEnd])
+  }, [profile.id, weekStart, weekEnd, graceActive, previousWeek.weekStart, previousWeek.weekEnd])
 
   const alreadySubmittedThisWeek = submissions.some((submission) => submission.week_start === weekStart)
+  const alreadySubmittedLastWeek = submissions.some((submission) => submission.week_start === previousWeek.weekStart)
+  const showLastWeekPanel = graceActive && !alreadySubmittedLastWeek
   const lifetimeTotal = useMemo(() => submissions.reduce((sum, submission) => sum + submission.amount, 0), [submissions])
 
   const totalsByDate = useMemo(() => {
@@ -70,27 +90,60 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     return totals
   }, [weekEntries])
 
+  const previousTotalsByDate = useMemo(() => {
+    const totals = new Map<string, number>()
+    for (const entry of previousWeekEntries) {
+      totals.set(entry.entry_date, (totals.get(entry.entry_date) ?? 0) + entry.earnings)
+    }
+    return totals
+  }, [previousWeekEntries])
+
   const liveTotal = useMemo(() => weekEntries.reduce((sum, entry) => sum + entry.earnings, 0), [weekEntries])
+  const previousLiveTotal = useMemo(
+    () => previousWeekEntries.reduce((sum, entry) => sum + entry.earnings, 0),
+    [previousWeekEntries],
+  )
+
+  const clientTotals = useMemo(() => earningsByClient(weekEntries, clients), [weekEntries, clients])
+  const previousClientTotals = useMemo(
+    () => earningsByClient(previousWeekEntries, clients),
+    [previousWeekEntries, clients],
+  )
 
   const selectedSubmission = submissions.find((submission) => submission.id === selectedSubmissionId) ?? null
-  const selectedDayIndex = selectedDate ? weekDates.indexOf(selectedDate) : -1
-  const selectedDayEntries = selectedDate ? weekEntries.filter((entry) => entry.entry_date === selectedDate) : []
+  const selectedIsPreviousWeek = selectedDate !== null && previousWeekDates.includes(selectedDate)
+  const selectedWeekDates = selectedIsPreviousWeek ? previousWeekDates : weekDates
+  const selectedDayIndex = selectedDate ? selectedWeekDates.indexOf(selectedDate) : -1
+  const selectedDayEntries = selectedDate
+    ? [...weekEntries, ...previousWeekEntries].filter((entry) => entry.entry_date === selectedDate)
+    : []
+  const selectedDayReadOnly = selectedIsPreviousWeek ? alreadySubmittedLastWeek : alreadySubmittedThisWeek
 
   function handleEntryAdded(entry: SaleEntry) {
-    setWeekEntries((previous) => [...previous, entry])
+    if (previousWeekDates.includes(entry.entry_date)) {
+      setPreviousWeekEntries((previous) => [...previous, entry])
+    } else {
+      setWeekEntries((previous) => [...previous, entry])
+    }
   }
 
   function handleEntryDeleted(entryId: string) {
     setWeekEntries((previous) => previous.filter((entry) => entry.id !== entryId))
+    setPreviousWeekEntries((previous) => previous.filter((entry) => entry.id !== entryId))
   }
 
-  async function handleSubmit() {
+  async function submitWeek(params: {
+    weekStart: string
+    weekEnd: string
+    weekDates: string[]
+    totalsByDate: Map<string, number>
+  }) {
     setFormError(null)
     setMessage(null)
 
     const dayAmounts: Record<string, number> = {}
     daysOfWeek.forEach((day, index) => {
-      const total = totalsByDate.get(weekDates[index]) ?? 0
+      const total = params.totalsByDate.get(params.weekDates[index]) ?? 0
       if (total > 0) dayAmounts[day] = total
     })
 
@@ -104,8 +157,8 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     try {
       const created = await submitTimesheet({
         workerId: profile.id,
-        weekStart,
-        weekEnd,
+        weekStart: params.weekStart,
+        weekEnd: params.weekEnd,
         dayAmounts,
         amount: total,
         ownerSharePercent: profile.owner_share_percent,
@@ -118,6 +171,20 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       setSubmitting(false)
     }
   }
+
+  const handleSubmit = () => submitWeek({ weekStart, weekEnd, weekDates, totalsByDate })
+  const handleSubmitLastWeek = () =>
+    submitWeek({
+      weekStart: previousWeek.weekStart,
+      weekEnd: previousWeek.weekEnd,
+      weekDates: previousWeekDates,
+      totalsByDate: previousTotalsByDate,
+    })
+
+  const graceDeadlineLabel = useMemo(
+    () => new Date(weekDates[2]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+    [weekDates],
+  )
 
   return (
     <div className="app-shell">
@@ -156,6 +223,32 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
             })}
           </HoverEffectGrid>
 
+          <div className="table-wrapper">
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Total earnings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientTotals.map((row) => (
+                  <tr key={row.clientName}>
+                    <td>{row.clientName}</td>
+                    <td>{formatCurrency(row.earnings)}</td>
+                  </tr>
+                ))}
+                {clientTotals.length === 0 && (
+                  <tr>
+                    <td colSpan={2} className="empty-row">
+                      No entries logged yet this week.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
           <div className="summary-card">
             <strong>Current week total</strong>
             <p className="summary-figure">{formatCurrency(liveTotal)}</p>
@@ -170,6 +263,76 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
           {message && <p className="message message-info">{message}</p>}
         </div>
       </section>
+
+      {showLastWeekPanel && (
+        <section className="panel worker-panel">
+          <div className="panel-head">
+            <div>
+              <h2>Last week</h2>
+              <p>
+                {formatWeekRange(previousWeek.weekStart, previousWeek.weekEnd)} — add sales until {graceDeadlineLabel}
+              </p>
+            </div>
+          </div>
+
+          <div className="stack">
+            <HoverEffectGrid className="day-grid">
+              {daysOfWeek.map((day, index) => {
+                const date = previousWeekDates[index]
+                return (
+                  <HoverEffectItem key={day} index={index}>
+                    <button
+                      type="button"
+                      className="day-card day-card-clickable"
+                      onClick={() => setSelectedDate(date)}
+                    >
+                      <span>{day}</span>
+                      <strong>{formatCurrency(previousTotalsByDate.get(date) ?? 0)}</strong>
+                    </button>
+                  </HoverEffectItem>
+                )
+              })}
+            </HoverEffectGrid>
+
+            <div className="table-wrapper">
+              <table className="detail-table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Total earnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previousClientTotals.map((row) => (
+                    <tr key={row.clientName}>
+                      <td>{row.clientName}</td>
+                      <td>{formatCurrency(row.earnings)}</td>
+                    </tr>
+                  ))}
+                  {previousClientTotals.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="empty-row">
+                        No entries logged for last week.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="summary-card">
+              <strong>Last week total</strong>
+              <p className="summary-figure">{formatCurrency(previousLiveTotal)}</p>
+            </div>
+
+            <button type="button" className="btn-primary" onClick={handleSubmitLastWeek} disabled={submitting}>
+              {submitting ? 'Submitting…' : "Submit last week's earnings"}
+            </button>
+            {formError && <p className="message message-error">{formError}</p>}
+            {message && <p className="message message-info">{message}</p>}
+          </div>
+        </section>
+      )}
 
       <section className="panel">
         <div className="panel-head">
@@ -274,7 +437,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
           clients={clients}
           saleTypes={saleTypes}
           entries={selectedDayEntries}
-          readOnly={alreadySubmittedThisWeek}
+          readOnly={selectedDayReadOnly}
           onEntryAdded={handleEntryAdded}
           onEntryDeleted={handleEntryDeleted}
           onClose={() => setSelectedDate(null)}

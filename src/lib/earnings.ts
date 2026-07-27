@@ -1,4 +1,4 @@
-import type { SaleEntry, SaleSection } from '../types'
+import type { Client, SaleEntry, SaleSection } from '../types'
 
 export const NET_RATE = 0.8
 
@@ -40,4 +40,27 @@ export function clientPayoutTotal(entries: SaleEntry[]): number {
     (sum, section) => sum + calcClientPayout(netBySection[section], section),
     0,
   )
+}
+
+export interface ClientEarningsTotal {
+  clientName: string
+  earnings: number
+}
+
+/** Groups a set of sale entries by client, summing each client's `earnings` (the worker's cut). */
+export function earningsByClient(entries: SaleEntry[], clients: Client[]): ClientEarningsTotal[] {
+  const totals = new Map<string, ClientEarningsTotal>()
+  for (const entry of entries) {
+    const key = entry.client_id ?? 'general'
+    const existing = totals.get(key)
+    if (existing) {
+      existing.earnings += entry.earnings
+      continue
+    }
+    totals.set(key, {
+      clientName: entry.client_id ? clients.find((c) => c.id === entry.client_id)?.name ?? 'Unknown client' : 'General',
+      earnings: entry.earnings,
+    })
+  }
+  return Array.from(totals.values()).sort((a, b) => b.earnings - a.earnings)
 }

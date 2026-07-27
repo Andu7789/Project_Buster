@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { SubmissionStatusBadge } from './StatusBadge'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
-import { sectionLabel } from '../lib/earnings'
+import { earningsByClient, sectionLabel } from '../lib/earnings'
 import type { Client, SaleEntry, Submission } from '../types'
 
 type Step = 'detail' | 'preview' | 'sent'
@@ -59,6 +59,7 @@ export function SubmissionInvoiceModal({
   const [error, setError] = useState<string | null>(null)
 
   const breakdown = useMemo(() => buildBreakdown(entries, clients), [entries, clients])
+  const clientTotals = useMemo(() => earningsByClient(entries, clients), [entries, clients])
   const invoiceAmount = submission.amount
 
   async function handleSend() {
@@ -136,7 +137,7 @@ export function SubmissionInvoiceModal({
       </p>
       <div className="detail-summary">
         <div>
-          <p className="label">Total earned</p>
+          <p className="label">Current week total</p>
           <strong>{formatCurrency(submission.amount)}</strong>
         </div>
         <div>
@@ -147,6 +148,32 @@ export function SubmissionInvoiceModal({
         </div>
       </div>
 
+      <h3>Earnings by client</h3>
+      <table className="detail-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Total earnings</th>
+          </tr>
+        </thead>
+        <tbody>
+          {clientTotals.map((row) => (
+            <tr key={row.clientName}>
+              <td>{row.clientName}</td>
+              <td>{formatCurrency(row.earnings)}</td>
+            </tr>
+          ))}
+          {clientTotals.length === 0 && (
+            <tr>
+              <td colSpan={2} className="empty-row">
+                No line items recorded for this week.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      <h3>Full breakdown</h3>
       <table className="detail-table">
         <thead>
           <tr>

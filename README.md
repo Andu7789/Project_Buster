@@ -44,10 +44,9 @@ on top of running `supabase/schema.sql` above (which also creates the `buster_re
 
 ### 1. Create your developer login
 
-`buster_profiles` requires a unique email per row, so if you already seeded your own email as the owner, the
-developer account needs a different address (a Gmail "+" alias like `you+dev@gmail.com` still lands in the same
-inbox). Edit the email/name in the developer seed block at the bottom of `supabase/schema.sql` and re-run the file,
-then sign up at `/dev` with that email.
+`buster_profiles` requires a unique email per row, so the developer seed at the bottom of `supabase/schema.sql`
+uses `andrew.britain7@gmail.com` - a different address from the owner seed above it. Re-run the file, then sign up
+at `/dev` with that email.
 
 ### 2. Create a Telegram bot
 

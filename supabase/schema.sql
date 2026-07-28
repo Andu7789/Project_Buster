@@ -471,12 +471,10 @@ on conflict (email) do nothing;
 
 -- ---------------------------------------------------------------------
 -- One-time seed for the developer login (/dev) - this is you, the person
--- who builds/maintains the app, not the business owner above. buster_profiles
--- has a unique email constraint, so this needs its own address - if
--- andrew.britain@gmail.com is already taken by the owner seed above, use a
--- distinct one, e.g. a Gmail "+" alias like andrew.britain+dev@gmail.com
--- (still lands in the same inbox, and Telegram notifications don't care).
+-- who builds/maintains the app, not the business owner above. A distinct
+-- address from the owner seed above - buster_profiles has a unique email
+-- constraint.
 -- ---------------------------------------------------------------------
 insert into buster_profiles (email, full_name, role, status)
-values ('andrew.britain+dev@gmail.com', 'Andrew Britain', 'developer', 'pending')
+values ('andrew.britain7@gmail.com', 'Andrew Britain', 'developer', 'pending')
 on conflict (email) do nothing;

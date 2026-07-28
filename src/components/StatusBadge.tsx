@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { ProfileStatus } from '../types'
+import type { ProfileStatus, RequestPriority, RequestStatus, RequestType } from '../types'
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 
@@ -25,4 +25,39 @@ export function SubmissionStatusBadge({ dealtWith }: { dealtWith: boolean }) {
   ) : (
     <StatusBadge tone="warning">Pending</StatusBadge>
   )
+}
+
+const requestTypeLabels: Record<RequestType, string> = {
+  bug: 'Bug',
+  feature: 'Feature idea',
+  billing: 'Charge request',
+}
+
+export function RequestTypeBadge({ type }: { type: RequestType }) {
+  return <StatusBadge tone="neutral">{requestTypeLabels[type]}</StatusBadge>
+}
+
+const requestPriorityMeta: Record<RequestPriority, { tone: Tone; label: string }> = {
+  low: { tone: 'neutral', label: 'Low priority' },
+  medium: { tone: 'info', label: 'Medium priority' },
+  high: { tone: 'warning', label: 'High priority' },
+  urgent: { tone: 'danger', label: 'Urgent' },
+}
+
+export function RequestPriorityBadge({ priority }: { priority: RequestPriority }) {
+  const meta = requestPriorityMeta[priority]
+  return <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+}
+
+const requestStatusMeta: Record<RequestStatus, { tone: Tone; label: string }> = {
+  open: { tone: 'info', label: 'Open' },
+  in_progress: { tone: 'warning', label: 'In progress' },
+  needs_info: { tone: 'danger', label: 'Needs your input' },
+  completed: { tone: 'success', label: 'Completed' },
+  declined: { tone: 'neutral', label: 'Declined' },
+}
+
+export function RequestStatusBadge({ status }: { status: RequestStatus }) {
+  const meta = requestStatusMeta[status]
+  return <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
 }

@@ -18,6 +18,13 @@ create table if not exists buster_profiles (
   created_at timestamptz not null default now()
 );
 
+-- Migration: add the developer role - the person who builds/maintains this
+-- app, distinct from the business owner. Drop-and-recreate because Postgres
+-- has no "alter check constraint" - safe to re-run.
+alter table buster_profiles drop constraint if exists buster_profiles_role_check;
+alter table buster_profiles add constraint buster_profiles_role_check
+  check (role in ('worker', 'owner', 'learner', 'developer'));
+
 create table if not exists buster_submissions (
   id uuid primary key default gen_random_uuid(),
   worker_id uuid not null references buster_profiles(id),
@@ -102,6 +109,35 @@ create table if not exists buster_training_progress (
   unique (learner_id, module_id)
 );
 
+-- Owner-raised requests (bugs, feature ideas, billing/charge requests) aimed
+-- at the developer, replacing ad-hoc messages outside the app. type/status/
+-- priority are free-standing enums (not FKs) since this is a small, fixed
+-- set owned by the app, same philosophy as buster_sale_entries.section.
+create table if not exists buster_requests (
+  id uuid primary key default gen_random_uuid(),
+  created_by uuid not null references buster_profiles(id),
+  type text not null check (type in ('bug', 'feature', 'billing')),
+  title text not null,
+  description text not null,
+  priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'urgent')),
+  status text not null default 'open' check (status in ('open', 'in_progress', 'needs_info', 'completed', 'declined')),
+  progress integer not null default 0 check (progress between 0 and 100),
+  screenshot_paths text[] not null default '{}',
+  resolution_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Back-and-forth thread on a request - lets the developer ask a clarifying
+-- question and the owner reply (or vice versa) without changing status.
+create table if not exists buster_request_comments (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references buster_requests(id) on delete cascade,
+  author_id uuid not null references buster_profiles(id),
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Security-definer helper so RLS policies can check "is this caller an owner"
 -- without recursive-RLS problems (a policy on `buster_profiles` can't directly
 -- re-query `buster_profiles` under RLS).
@@ -114,6 +150,20 @@ as $$
   select exists (
     select 1 from buster_profiles
     where auth_user_id = auth.uid() and role = 'owner' and status = 'active'
+  );
+$$;
+
+-- Same shape as buster_is_owner() above, for the developer role - used by
+-- the request-tracker RLS policies below.
+create or replace function buster_is_developer()
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1 from buster_profiles
+    where auth_user_id = auth.uid() and role = 'developer' and status = 'active'
   );
 $$;
 
@@ -197,6 +247,8 @@ alter table buster_sale_entries enable row level security;
 alter table buster_client_invoices enable row level security;
 alter table buster_training_progress enable row level security;
 alter table buster_calendar_events enable row level security;
+alter table buster_requests enable row level security;
+alter table buster_request_comments enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -212,6 +264,13 @@ drop policy if exists "owner manages all" on buster_profiles;
 create policy "owner manages all" on buster_profiles for all
   using (buster_is_owner())
   with check (buster_is_owner());
+
+-- Lets the developer dashboard show "raised by <owner name>" on a request -
+-- narrower than the owner's own full-table access above, since the
+-- developer only ever needs to resolve the owner side of a request thread.
+drop policy if exists "developer reads owner profiles" on buster_profiles;
+create policy "developer reads owner profiles" on buster_profiles for select
+  using (buster_is_developer() and role = 'owner');
 
 -- buster_submissions policies
 drop policy if exists "worker inserts own" on buster_submissions;
@@ -297,6 +356,87 @@ create policy "owner manages" on buster_calendar_events for all
   using (buster_is_owner())
   with check (buster_is_owner());
 
+-- buster_requests policies - the owner raises requests, the developer
+-- triages/updates them. No owner update/delete policy: same immutability
+-- philosophy as buster_submissions - fixing something after the fact goes
+-- through a comment, not an edit of the original request.
+drop policy if exists "owner inserts own" on buster_requests;
+create policy "owner inserts own" on buster_requests for insert
+  with check (
+    created_by in (select id from buster_profiles where auth_user_id = auth.uid() and status = 'active')
+  );
+
+drop policy if exists "owner reads own, developer reads all" on buster_requests;
+create policy "owner reads own, developer reads all" on buster_requests for select
+  using (
+    created_by in (select id from buster_profiles where auth_user_id = auth.uid())
+    or buster_is_developer()
+  );
+
+drop policy if exists "developer updates any" on buster_requests;
+create policy "developer updates any" on buster_requests for update
+  using (buster_is_developer())
+  with check (buster_is_developer());
+
+-- buster_request_comments policies - either side of a request's thread can
+-- post and read, gated through the parent request's ownership.
+drop policy if exists "participants insert" on buster_request_comments;
+create policy "participants insert" on buster_request_comments for insert
+  with check (
+    author_id in (select id from buster_profiles where auth_user_id = auth.uid() and status = 'active')
+    and (
+      buster_is_developer()
+      or exists (
+        select 1 from buster_requests r
+        join buster_profiles p on p.id = r.created_by
+        where r.id = request_id and p.auth_user_id = auth.uid()
+      )
+    )
+  );
+
+drop policy if exists "participants read" on buster_request_comments;
+create policy "participants read" on buster_request_comments for select
+  using (
+    buster_is_developer()
+    or exists (
+      select 1 from buster_requests r
+      join buster_profiles p on p.id = r.created_by
+      where r.id = request_id and p.auth_user_id = auth.uid()
+    )
+  );
+
+-- Private storage bucket for request screenshots. Objects are stored under
+-- "<profile id>/<filename>" so the folder-name policies below can gate
+-- access without a join - the owner who created them (by folder) or any
+-- developer can read; only the uploader's own folder accepts inserts/deletes.
+insert into storage.buckets (id, name, public)
+values ('request-screenshots', 'request-screenshots', false)
+on conflict (id) do nothing;
+
+drop policy if exists "request screenshot upload" on storage.objects;
+create policy "request screenshot upload" on storage.objects for insert
+  with check (
+    bucket_id = 'request-screenshots'
+    and (storage.foldername(name))[1] = (select id::text from buster_profiles where auth_user_id = auth.uid())
+  );
+
+drop policy if exists "request screenshot read" on storage.objects;
+create policy "request screenshot read" on storage.objects for select
+  using (
+    bucket_id = 'request-screenshots'
+    and (
+      (storage.foldername(name))[1] = (select id::text from buster_profiles where auth_user_id = auth.uid())
+      or buster_is_developer()
+    )
+  );
+
+drop policy if exists "request screenshot delete own" on storage.objects;
+create policy "request screenshot delete own" on storage.objects for delete
+  using (
+    bucket_id = 'request-screenshots'
+    and (storage.foldername(name))[1] = (select id::text from buster_profiles where auth_user_id = auth.uid())
+  );
+
 -- buster_training_progress policies
 drop policy if exists "learner reads own, owner reads all" on buster_training_progress;
 create policy "learner reads own, owner reads all" on buster_training_progress for select
@@ -327,4 +467,16 @@ create policy "learner deletes own" on buster_training_progress for delete
 -- ---------------------------------------------------------------------
 insert into buster_profiles (email, full_name, role, status)
 values ('andrew.britain@gmail.com', 'Andrew Britain', 'owner', 'pending')
+on conflict (email) do nothing;
+
+-- ---------------------------------------------------------------------
+-- One-time seed for the developer login (/dev) - this is you, the person
+-- who builds/maintains the app, not the business owner above. buster_profiles
+-- has a unique email constraint, so this needs its own address - if
+-- andrew.britain@gmail.com is already taken by the owner seed above, use a
+-- distinct one, e.g. a Gmail "+" alias like andrew.britain+dev@gmail.com
+-- (still lands in the same inbox, and Telegram notifications don't care).
+-- ---------------------------------------------------------------------
+insert into buster_profiles (email, full_name, role, status)
+values ('andrew.britain+dev@gmail.com', 'Andrew Britain', 'developer', 'pending')
 on conflict (email) do nothing;

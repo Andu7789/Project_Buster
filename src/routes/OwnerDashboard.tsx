@@ -36,6 +36,7 @@ import { TeamClientsSaleTypesTab } from './OwnerDashboard/TeamClientsSaleTypesTa
 import { LearnersTrainingTab } from './OwnerDashboard/LearnersTrainingTab'
 import { SubmissionsInvoicesTab } from './OwnerDashboard/SubmissionsInvoicesTab'
 import { CalendarTab } from './OwnerDashboard/CalendarTab'
+import { RequestsTab } from './OwnerDashboard/RequestsTab'
 
 export function OwnerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
@@ -572,6 +573,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           )}
 
           {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} saleTypes={saleTypes} />}
+
+          {activeTab === 'requests' && <RequestsTab profile={profile} />}
         </>
       )}
 

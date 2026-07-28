@@ -87,3 +87,8 @@ export function getMonthGridDates(reference: Date): string[] {
 export function formatMonthLabel(reference: Date): string {
   return reference.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 }
+
+export function formatDateTime(isoString: string): string {
+  const date = new Date(isoString)
+  return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}

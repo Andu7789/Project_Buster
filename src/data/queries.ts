@@ -4,8 +4,13 @@ import type {
   CalendarEvent,
   Client,
   ClientInvoice,
+  DevRequest,
   Profile,
   ProfileStatus,
+  RequestComment,
+  RequestPriority,
+  RequestStatus,
+  RequestType,
   SaleEntry,
   SaleSection,
   SaleType,
@@ -51,6 +56,22 @@ export async function listWorkers(): Promise<Profile[]> {
     .eq('role', 'worker')
     .order('created_at', { ascending: true })
 
+  if (error) throw error
+  return (data ?? []) as Profile[]
+}
+
+/** Developer-side name lookup for "raised by" - RLS scopes this to role='owner' rows only. */
+export async function listOwners(): Promise<Profile[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_profiles').select('*').eq('role', 'owner')
+  if (error) throw error
+  return (data ?? []) as Profile[]
+}
+
+/** Owner-side name lookup for comment authorship - owners can already read every profile. */
+export async function listDevelopers(): Promise<Profile[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_profiles').select('*').eq('role', 'developer')
   if (error) throw error
   return (data ?? []) as Profile[]
 }
@@ -524,4 +545,137 @@ export async function resetTrainingProgress(learnerId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_training_progress').delete().eq('learner_id', learnerId)
   if (error) throw error
+}
+
+/** Owner-side: only the requests this profile raised. */
+export async function listRequestsForOwner(ownerId: string): Promise<DevRequest[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_requests')
+    .select('*')
+    .eq('created_by', ownerId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as DevRequest[]
+}
+
+/** Developer-side: every request - RLS already restricts this to developers. */
+export async function listAllRequests(): Promise<DevRequest[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_requests').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as DevRequest[]
+}
+
+export async function createRequest(input: {
+  createdBy: string
+  type: RequestType
+  title: string
+  description: string
+  priority: RequestPriority
+  screenshotPaths: string[]
+}): Promise<DevRequest> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_requests')
+    .insert({
+      created_by: input.createdBy,
+      type: input.type,
+      title: input.title.trim(),
+      description: input.description.trim(),
+      priority: input.priority,
+      screenshot_paths: input.screenshotPaths,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as DevRequest
+}
+
+/** Developer-only (RLS-enforced): update the workflow fields of a request. */
+export async function updateRequest(
+  requestId: string,
+  input: { status: RequestStatus; progress: number; resolutionNotes?: string | null },
+): Promise<DevRequest> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_requests')
+    .update({
+      status: input.status,
+      progress: input.progress,
+      resolution_notes: input.resolutionNotes ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', requestId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as DevRequest
+}
+
+/** Every comment the caller can see - RLS restricts this to their own requests' threads (owner) or all (developer). */
+export async function listAllRequestComments(): Promise<RequestComment[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_request_comments').select('*').order('created_at', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as RequestComment[]
+}
+
+export async function addRequestComment(input: { requestId: string; authorId: string; body: string }): Promise<RequestComment> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_request_comments')
+    .insert({ request_id: input.requestId, author_id: input.authorId, body: input.body.trim() })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as RequestComment
+}
+
+/** Uploads screenshots to the private request-screenshots bucket, one object per file under "<profileId>/...". */
+export async function uploadRequestScreenshots(profileId: string, files: File[]): Promise<string[]> {
+  const client = requireClient()
+  const paths: string[] = []
+  for (const file of files) {
+    const path = `${profileId}/${crypto.randomUUID()}-${file.name}`
+    const { error } = await client.storage.from('request-screenshots').upload(path, file)
+    if (error) throw error
+    paths.push(path)
+  }
+  return paths
+}
+
+/** Resolves storage paths to temporary signed URLs (the bucket is private). */
+export async function getScreenshotSignedUrls(paths: string[]): Promise<Record<string, string>> {
+  if (paths.length === 0) return {}
+  const client = requireClient()
+  const { data, error } = await client.storage.from('request-screenshots').createSignedUrls(paths, 3600)
+  if (error) throw error
+  const map: Record<string, string> = {}
+  for (const entry of data ?? []) {
+    if (entry.signedUrl && entry.path) map[entry.path] = entry.signedUrl
+  }
+  return map
+}
+
+/**
+ * Best-effort Telegram notification via the notify-telegram edge function -
+ * failures are logged, not thrown, so a Telegram/edge-function hiccup never
+ * blocks the request/comment/status-update it's reporting on.
+ */
+export async function notifyTelegram(
+  event: 'request_created' | 'status_changed' | 'comment_added',
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const client = requireClient()
+  try {
+    const { error } = await client.functions.invoke('notify-telegram', { body: { event, ...payload } })
+    if (error) console.error('Telegram notification failed:', error)
+  } catch (err) {
+    console.error('Telegram notification failed:', err)
+  }
 }

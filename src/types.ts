@@ -1,4 +1,4 @@
-export type UserRole = 'worker' | 'owner' | 'learner'
+export type UserRole = 'worker' | 'owner' | 'learner' | 'developer'
 
 export type ProfileStatus = 'pending' | 'active' | 'suspended' | 'removed'
 
@@ -82,5 +82,32 @@ export interface ClientInvoice {
   owner_cut: number
   client_payout: number
   dealt_with: boolean
+  created_at: string
+}
+
+export type RequestType = 'bug' | 'feature' | 'billing'
+export type RequestPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type RequestStatus = 'open' | 'in_progress' | 'needs_info' | 'completed' | 'declined'
+
+export interface DevRequest {
+  id: string
+  created_by: string
+  type: RequestType
+  title: string
+  description: string
+  priority: RequestPriority
+  status: RequestStatus
+  progress: number
+  screenshot_paths: string[]
+  resolution_notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RequestComment {
+  id: string
+  request_id: string
+  author_id: string
+  body: string
   created_at: string
 }

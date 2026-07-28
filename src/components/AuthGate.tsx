@@ -17,6 +17,7 @@ const PORTALS_BY_ROLE: Record<UserRole, { path: string; label: string }> = {
   worker: { path: '/', label: 'worker' },
   owner: { path: '/owner', label: 'owner' },
   learner: { path: '/learn', label: 'learner' },
+  developer: { path: '/dev', label: 'developer' },
 }
 
 export function AuthGate({

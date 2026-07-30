@@ -1,8 +1,12 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatCurrency, formatWeekRange } from './dates'
+import { formatWeekRange } from './dates'
 import { calcOwnerCut, ownerSubmissionCategoryLabel, sectionLabel } from './earnings'
 import type { OwnerSubmission, OwnerSubmissionItem, SaleEntry, SaleType } from '../types'
+
+function formatGbp(usdAmount: number, rate: number): string {
+  return `£${(usdAmount * rate).toFixed(2)}`
+}
 
 interface BreakdownRow {
   date: string
@@ -31,7 +35,10 @@ export function generateOwnerInvoicePdf(input: {
   saleTypes: SaleType[]
   ownerSubmissions: OwnerSubmission[]
   ownerSubmissionItems: OwnerSubmissionItem[]
+  exchangeRate: number
+  exchangeRateDate: string
 }): void {
+  const { exchangeRate: rate } = input
   const weekLabel = formatWeekRange(input.weekStart, input.weekEnd)
   const doc = new jsPDF()
 
@@ -40,13 +47,15 @@ export function generateOwnerInvoicePdf(input: {
   doc.text('Owner Invoice (dummy)', 14, 20)
   doc.setFontSize(12)
   doc.text(`${input.clientName} — ${weekLabel}`, 14, 28)
+  doc.setFontSize(9)
+  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, 34)
 
   autoTable(doc, {
     startY: 40,
     head: [['', 'Amount']],
     body: [
-      ['Owner submissions cut', formatCurrency(input.ownerSubmissionsCut)],
-      ['Client invoice owner cut', formatCurrency(input.clientInvoiceOwnerCut)],
+      ['Owner submissions cut', formatGbp(input.ownerSubmissionsCut, rate)],
+      ['Client invoice owner cut', formatGbp(input.clientInvoiceOwnerCut, rate)],
     ],
     styles: { fontSize: 11 },
     headStyles: { fillColor: [53, 104, 168] },
@@ -54,7 +63,7 @@ export function generateOwnerInvoicePdf(input: {
 
   const afterTotalsY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
   doc.setFontSize(14)
-  doc.text(`Combined owner cut: ${formatCurrency(input.combinedOwnerCut)}`, 14, afterTotalsY + 12)
+  doc.text(`Combined owner cut: ${formatGbp(input.combinedOwnerCut, rate)}`, 14, afterTotalsY + 12)
 
   // Page two - contractor entries (Sexting/Customs), one line per transaction, oldest first.
   const saleRows: BreakdownRow[] = input.saleEntries
@@ -78,7 +87,7 @@ export function generateOwnerInvoicePdf(input: {
   autoTable(doc, {
     startY: 28,
     head: [['Date', 'Category', 'Description', 'Gross', 'Net', 'Owner cut']],
-    body: rowsToBody(saleRows),
+    body: rowsToBody(saleRows, rate),
     styles: { fontSize: 9 },
     headStyles: { fillColor: [53, 104, 168] },
   })
@@ -110,7 +119,7 @@ export function generateOwnerInvoicePdf(input: {
   autoTable(doc, {
     startY: 28,
     head: [['Date', 'Category', 'Description', 'Gross', 'Net', 'Owner cut']],
-    body: rowsToBody(ownerSubmissionRows),
+    body: rowsToBody(ownerSubmissionRows, rate),
     styles: { fontSize: 9 },
     headStyles: { fillColor: [53, 104, 168] },
   })
@@ -123,13 +132,13 @@ export function generateOwnerInvoicePdf(input: {
   doc.save(`owner-invoice-${input.clientName.replace(/\s+/g, '-').toLowerCase()}-${input.weekStart}.pdf`)
 }
 
-function rowsToBody(rows: BreakdownRow[]): string[][] {
+function rowsToBody(rows: BreakdownRow[], rate: number): string[][] {
   return rows.map((row) => [
     row.date,
     row.category,
     row.description,
-    formatCurrency(row.gross),
-    formatCurrency(row.net),
-    formatCurrency(row.ownerCut),
+    formatGbp(row.gross, rate),
+    formatGbp(row.net, rate),
+    formatGbp(row.ownerCut, rate),
   ])
 }

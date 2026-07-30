@@ -35,6 +35,7 @@ import {
 } from '../data/queries'
 import { formatCurrency, getCurrentWeekRange } from '../lib/dates'
 import { calcOwnerCut, clientPayoutTotal } from '../lib/earnings'
+import { fetchUsdToGbpRate, type UsdToGbpRate } from '../lib/exchangeRate'
 import { generateOwnerInvoicePdf } from '../lib/invoicePdf'
 import type {
   Client,
@@ -657,12 +658,20 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     )
   }
 
-  function handleDownloadOwnerInvoicePdf(client: Client) {
+  async function handleDownloadOwnerInvoicePdf(client: Client) {
     const clientInvoiceOwnerCut =
       clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
         ?.owner_cut ?? 0
     const clientOwnerSubmissions = ownerSubmissions.filter((entry) => entry.client_id === client.id)
     const ownerSubmissionsCut = clientOwnerSubmissions.reduce((sum, entry) => sum + entry.owner_cut, 0)
+
+    let exchangeRate: UsdToGbpRate
+    try {
+      exchangeRate = await fetchUsdToGbpRate()
+    } catch {
+      window.alert('Could not fetch today\'s USD to GBP exchange rate - check your connection and try again.')
+      return
+    }
 
     generateOwnerInvoicePdf({
       clientName: client.name,
@@ -675,6 +684,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       saleTypes,
       ownerSubmissions: clientOwnerSubmissions,
       ownerSubmissionItems,
+      exchangeRate: exchangeRate.rate,
+      exchangeRateDate: exchangeRate.date,
     })
   }
 

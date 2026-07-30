@@ -58,7 +58,7 @@ export function ClientInvoiceModal({
   onCreateInvoice: () => Promise<ClientInvoice>
   onSendInvoice: (invoiceId: string) => Promise<void>
 }) {
-  const [step, setStep] = useState<Step>('detail')
+  const [step, setStep] = useState<Step>(existingInvoice?.dealt_with ? 'sent' : 'detail')
   const [invoice, setInvoice] = useState<ClientInvoice | null>(existingInvoice)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -100,22 +100,34 @@ export function ClientInvoiceModal({
     }
   }
 
-  if (step === 'sent' || invoice?.dealt_with) {
+  if (step === 'sent') {
     return (
       <Modal title="Invoice sent" onClose={onClose}>
         <p className="modal-subtitle">
           {clientName} — {weekLabel}
         </p>
-        <div className="invoice-sent">
-          <strong>{formatCurrency(invoice?.client_payout ?? clientPayout)}</strong>
-          <p>
-            Invoice simulated to {clientName}. Telegram delivery isn't wired up yet, but this week is now marked as
-            invoiced.
-          </p>
+        <div className="invoice-lines">
+          <div className="invoice-line invoice-line-total">
+            <span>Client payout</span>
+            <span>{formatCurrency(invoice?.client_payout ?? clientPayout)}</span>
+          </div>
+          <div className="invoice-line">
+            <span>Owner payout</span>
+            <span>{formatCurrency(invoice?.owner_cut ?? ownerCut)}</span>
+          </div>
         </div>
-        <button type="button" className="btn-primary" onClick={onClose}>
-          Done
-        </button>
+        <p className="info-text">
+          Invoice simulated to {clientName}. Telegram delivery isn't wired up yet, but this week is now marked as
+          invoiced.
+        </p>
+        <div className="modal-actions">
+          <button type="button" className="btn-outline" onClick={() => setStep('detail')}>
+            View breakdown
+          </button>
+          <button type="button" className="btn-primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
       </Modal>
     )
   }
@@ -231,7 +243,11 @@ export function ClientInvoiceModal({
 
       {error && <p className="message message-error">{error}</p>}
 
-      {invoice ? (
+      {invoice?.dealt_with ? (
+        <button type="button" className="btn-primary" onClick={() => setStep('sent')}>
+          View summary
+        </button>
+      ) : invoice ? (
         <button type="button" className="btn-primary" onClick={() => setStep('preview')}>
           Continue to send
         </button>

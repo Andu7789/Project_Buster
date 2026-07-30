@@ -138,6 +138,54 @@ create table if not exists buster_request_comments (
   created_at timestamptz not null default now()
 );
 
+-- Owner-managed price list for the three owner-direct revenue streams (not
+-- entered by workers): Subscriptions, Tips, Livestreams. One table with a
+-- category column, same shape as buster_sale_entries.section handling
+-- Sexting/Customs.
+create table if not exists buster_owner_submission_items (
+  id uuid primary key default gen_random_uuid(),
+  category text not null check (category in ('subscriptions', 'tips', 'livestreams')),
+  label text not null,
+  price numeric not null check (price >= 0),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (category, label)
+);
+
+-- The owner's own logged transactions for those 3 categories, per client.
+-- No worker_id - this is owner-entered data, distinct from buster_sale_entries.
+create table if not exists buster_owner_submissions (
+  id uuid primary key default gen_random_uuid(),
+  category text not null check (category in ('subscriptions', 'tips', 'livestreams')),
+  client_id uuid references buster_clients(id),
+  entry_date date not null,
+  item_id uuid not null references buster_owner_submission_items(id),
+  gross numeric not null check (gross >= 0),
+  net numeric not null,
+  owner_cut numeric not null,
+  created_at timestamptz not null default now()
+);
+
+-- Weekly per-client finalization of the 3 owner-submission categories above,
+-- combined with that week's buster_client_invoices owner_cut for the same
+-- client (captured at creation time, same "snapshot the numbers" approach as
+-- buster_client_invoices itself).
+create table if not exists buster_owner_submission_invoices (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references buster_clients(id),
+  week_start date not null,
+  week_end date not null,
+  subscriptions_owner_cut numeric not null,
+  tips_owner_cut numeric not null,
+  livestreams_owner_cut numeric not null,
+  owner_submissions_cut numeric not null,
+  client_invoice_owner_cut numeric not null,
+  combined_owner_cut numeric not null,
+  dealt_with boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (client_id, week_start)
+);
+
 -- Security-definer helper so RLS policies can check "is this caller an owner"
 -- without recursive-RLS problems (a policy on `buster_profiles` can't directly
 -- re-query `buster_profiles` under RLS).
@@ -249,6 +297,9 @@ alter table buster_training_progress enable row level security;
 alter table buster_calendar_events enable row level security;
 alter table buster_requests enable row level security;
 alter table buster_request_comments enable row level security;
+alter table buster_owner_submission_items enable row level security;
+alter table buster_owner_submissions enable row level security;
+alter table buster_owner_submission_invoices enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -353,6 +404,24 @@ create policy "owner manages" on buster_client_invoices for all
 -- buster_client_invoices above (workers/learners never see these).
 drop policy if exists "owner manages" on buster_calendar_events;
 create policy "owner manages" on buster_calendar_events for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+-- buster_owner_submission_items / buster_owner_submissions /
+-- buster_owner_submission_invoices policies - owner-only, same shape as
+-- buster_client_invoices above (workers/learners never see these).
+drop policy if exists "owner manages" on buster_owner_submission_items;
+create policy "owner manages" on buster_owner_submission_items for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+drop policy if exists "owner manages" on buster_owner_submissions;
+create policy "owner manages" on buster_owner_submissions for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+drop policy if exists "owner manages" on buster_owner_submission_invoices;
+create policy "owner manages" on buster_owner_submission_invoices for all
   using (buster_is_owner())
   with check (buster_is_owner());
 

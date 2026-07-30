@@ -85,6 +85,44 @@ export interface ClientInvoice {
   created_at: string
 }
 
+export type OwnerSubmissionCategory = 'subscriptions' | 'tips' | 'livestreams'
+
+export interface OwnerSubmissionItem {
+  id: string
+  category: OwnerSubmissionCategory
+  label: string
+  price: number
+  active: boolean
+  created_at: string
+}
+
+export interface OwnerSubmission {
+  id: string
+  category: OwnerSubmissionCategory
+  client_id: string | null
+  entry_date: string
+  item_id: string
+  gross: number
+  net: number
+  owner_cut: number
+  created_at: string
+}
+
+export interface OwnerSubmissionInvoice {
+  id: string
+  client_id: string
+  week_start: string
+  week_end: string
+  subscriptions_owner_cut: number
+  tips_owner_cut: number
+  livestreams_owner_cut: number
+  owner_submissions_cut: number
+  client_invoice_owner_cut: number
+  combined_owner_cut: number
+  dealt_with: boolean
+  created_at: string
+}
+
 export type RequestType = 'bug' | 'feature' | 'billing'
 export type RequestPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type RequestStatus = 'open' | 'in_progress' | 'needs_info' | 'completed' | 'declined'

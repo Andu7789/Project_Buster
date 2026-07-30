@@ -3,38 +3,65 @@ import { useAuth } from '../lib/authContext'
 import {
   addClient,
   addLearner,
+  addOwnerSubmission,
+  addOwnerSubmissionItem,
   addSaleType,
   addWorker,
   createClientInvoice,
+  createOwnerSubmissionInvoice,
+  deleteOwnerSubmission,
   deleteProfile,
   listAllSubmissions,
   listAllTrainingProgress,
   listClientInvoices,
   listClients,
   listLearners,
+  listOwnerSubmissionInvoices,
+  listOwnerSubmissionItems,
+  listOwnerSubmissionsForRange,
+  listSaleEntriesForRange,
   listSaleEntriesForWeek,
   listSaleEntriesForWorker,
   listSaleTypes,
   listWorkers,
   markClientInvoiceDealtWith,
   markDealtWith,
+  markOwnerSubmissionInvoiceDealtWith,
   setClientActive,
+  setOwnerSubmissionItemActive,
   setProfileStatus,
   setSaleTypeActive,
   updateWorkerShare,
 } from '../data/queries'
 import { formatCurrency, getCurrentWeekRange } from '../lib/dates'
 import { calcOwnerCut, clientPayoutTotal } from '../lib/earnings'
-import type { Client, ClientInvoice, Profile, ProfileStatus, SaleEntry, SaleSection, SaleType, Submission, TrainingProgress } from '../types'
+import { generateOwnerInvoicePdf } from '../lib/invoicePdf'
+import type {
+  Client,
+  ClientInvoice,
+  OwnerSubmission,
+  OwnerSubmissionCategory,
+  OwnerSubmissionInvoice,
+  OwnerSubmissionItem,
+  Profile,
+  ProfileStatus,
+  SaleEntry,
+  SaleSection,
+  SaleType,
+  Submission,
+  TrainingProgress,
+} from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { StatCard } from '../components/StatCard'
 import { SubmissionInvoiceModal } from '../components/SubmissionInvoiceModal'
 import { ClientInvoiceModal } from '../components/ClientInvoiceModal'
+import { OwnerSubmissionInvoiceModal } from '../components/OwnerSubmissionInvoiceModal'
 import { WeekTrendChart } from '../components/WeekTrendChart'
 import { TabNav, type OwnerTabId } from './OwnerDashboard/TabNav'
 import { TeamClientsSaleTypesTab } from './OwnerDashboard/TeamClientsSaleTypesTab'
 import { LearnersTrainingTab } from './OwnerDashboard/LearnersTrainingTab'
 import { SubmissionsInvoicesTab } from './OwnerDashboard/SubmissionsInvoicesTab'
+import { OwnerSubmissionsTab } from './OwnerDashboard/OwnerSubmissionsTab'
 import { CalendarTab } from './OwnerDashboard/CalendarTab'
 import { RequestsTab } from './OwnerDashboard/RequestsTab'
 
@@ -48,6 +75,9 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
   const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
   const [clientInvoices, setClientInvoices] = useState<ClientInvoice[]>([])
+  const [ownerSubmissionItems, setOwnerSubmissionItems] = useState<OwnerSubmissionItem[]>([])
+  const [ownerSubmissions, setOwnerSubmissions] = useState<OwnerSubmission[]>([])
+  const [ownerSubmissionInvoices, setOwnerSubmissionInvoices] = useState<OwnerSubmissionInvoice[]>([])
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -57,6 +87,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
+  const [viewedInvoiceId, setViewedInvoiceId] = useState<string | null>(null)
+  const [viewedInvoiceEntries, setViewedInvoiceEntries] = useState<SaleEntry[]>([])
 
   const [newClientName, setNewClientName] = useState('')
   const [addingClient, setAddingClient] = useState(false)
@@ -65,6 +97,13 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [newSaleTypeLabel, setNewSaleTypeLabel] = useState('')
   const [addingSaleType, setAddingSaleType] = useState(false)
   const [saleTypeError, setSaleTypeError] = useState<string | null>(null)
+
+  const [newOwnerSubmissionCategory, setNewOwnerSubmissionCategory] = useState<OwnerSubmissionCategory>('subscriptions')
+  const [newOwnerSubmissionLabel, setNewOwnerSubmissionLabel] = useState('')
+  const [newOwnerSubmissionPrice, setNewOwnerSubmissionPrice] = useState('')
+  const [addingOwnerSubmissionItem, setAddingOwnerSubmissionItem] = useState(false)
+  const [ownerSubmissionItemError, setOwnerSubmissionItemError] = useState<string | null>(null)
+  const [selectedOwnerSubmissionClientId, setSelectedOwnerSubmissionClientId] = useState<string | null>(null)
 
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null)
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
@@ -99,6 +138,9 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       listClientInvoices(),
       listLearners(),
       listAllTrainingProgress(),
+      listOwnerSubmissionItems(),
+      listOwnerSubmissionsForRange(currentWeekStart, currentWeekEnd),
+      listOwnerSubmissionInvoices(),
     ])
       .then(
         ([
@@ -110,6 +152,9 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           clientInvoiceData,
           learnerData,
           progressData,
+          ownerSubmissionItemData,
+          ownerSubmissionData,
+          ownerSubmissionInvoiceData,
         ]) => {
           if (cancelled) return
           setWorkers(workerData)
@@ -120,6 +165,9 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setClientInvoices(clientInvoiceData)
           setLearners(learnerData)
           setTrainingProgress(progressData)
+          setOwnerSubmissionItems(ownerSubmissionItemData)
+          setOwnerSubmissions(ownerSubmissionData)
+          setOwnerSubmissionInvoices(ownerSubmissionInvoiceData)
           setSelectedWorkerId((current) => current ?? workerData[0]?.id ?? null)
         },
       )
@@ -173,6 +221,58 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     ? clientInvoices.find((invoice) => invoice.client_id === selectedClientId && invoice.week_start === currentWeekStart) ?? null
     : null
 
+  const viewedInvoice = clientInvoices.find((invoice) => invoice.id === viewedInvoiceId) ?? null
+  const viewedInvoiceClientName = viewedInvoice
+    ? clients.find((client) => client.id === viewedInvoice.client_id)?.name ?? 'Unknown client'
+    : ''
+
+  const selectedOwnerSubmissionClient = clients.find((client) => client.id === selectedOwnerSubmissionClientId) ?? null
+  const selectedOwnerSubmissionEntries = selectedOwnerSubmissionClientId
+    ? ownerSubmissions.filter((entry) => entry.client_id === selectedOwnerSubmissionClientId)
+    : []
+  const selectedOwnerSubmissionsCutBySection = {
+    subscriptions: selectedOwnerSubmissionEntries
+      .filter((entry) => entry.category === 'subscriptions')
+      .reduce((sum, entry) => sum + entry.owner_cut, 0),
+    tips: selectedOwnerSubmissionEntries.filter((entry) => entry.category === 'tips').reduce((sum, entry) => sum + entry.owner_cut, 0),
+    livestreams: selectedOwnerSubmissionEntries
+      .filter((entry) => entry.category === 'livestreams')
+      .reduce((sum, entry) => sum + entry.owner_cut, 0),
+  }
+  const selectedOwnerSubmissionsCut =
+    selectedOwnerSubmissionsCutBySection.subscriptions +
+    selectedOwnerSubmissionsCutBySection.tips +
+    selectedOwnerSubmissionsCutBySection.livestreams
+  const selectedOwnerSubmissionClientInvoice = selectedOwnerSubmissionClientId
+    ? clientInvoices.find(
+        (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === currentWeekStart,
+      ) ?? null
+    : null
+  const selectedOwnerSubmissionInvoice = selectedOwnerSubmissionClientId
+    ? ownerSubmissionInvoices.find(
+        (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === currentWeekStart,
+      ) ?? null
+    : null
+
+  /**
+   * Workers who logged sale entries for this client this week but haven't submitted
+   * their weekly timesheet yet - their entries could still change, so the owner invoice
+   * (which combines the client-invoice owner cut with this week's owner submissions) isn't
+   * final until every one of them has submitted.
+   */
+  function missingWorkerNamesForClient(clientId: string): string[] {
+    const workerIds = new Set(
+      weekEntries.filter((entry) => entry.client_id === clientId).map((entry) => entry.worker_id),
+    )
+    return Array.from(workerIds)
+      .filter((workerId) => !submissions.some((s) => s.worker_id === workerId && s.week_start === currentWeekStart))
+      .map((workerId) => workers.find((w) => w.id === workerId)?.full_name ?? 'Unknown worker')
+  }
+
+  const selectedOwnerSubmissionMissingWorkers = selectedOwnerSubmissionClientId
+    ? missingWorkerNamesForClient(selectedOwnerSubmissionClientId)
+    : []
+
   const progressByLearner = useMemo(() => {
     const map = new Map<string, TrainingProgress[]>()
     for (const row of trainingProgress) {
@@ -197,6 +297,21 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       cancelled = true
     }
   }, [selectedSubmission])
+
+  useEffect(() => {
+    if (!viewedInvoice) return
+    let cancelled = false
+    listSaleEntriesForRange(viewedInvoice.week_start, viewedInvoice.week_end)
+      .then((data) => {
+        if (!cancelled) setViewedInvoiceEntries(data.filter((entry) => entry.client_id === viewedInvoice.client_id))
+      })
+      .catch(() => {
+        if (!cancelled) setViewedInvoiceEntries([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [viewedInvoice])
 
   async function handleAddWorker(event: FormEvent) {
     event.preventDefault()
@@ -455,6 +570,114 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     )
   }
 
+  async function handleAddOwnerSubmissionItem(event: FormEvent) {
+    event.preventDefault()
+    setOwnerSubmissionItemError(null)
+    const label = newOwnerSubmissionLabel.trim()
+    const price = Number(newOwnerSubmissionPrice)
+    if (!label) {
+      setOwnerSubmissionItemError('Enter an item name.')
+      return
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      setOwnerSubmissionItemError('Enter a valid price.')
+      return
+    }
+    setAddingOwnerSubmissionItem(true)
+    try {
+      const created = await addOwnerSubmissionItem({ category: newOwnerSubmissionCategory, label, price })
+      setOwnerSubmissionItems((previous) => [...previous, created])
+      setNewOwnerSubmissionLabel('')
+      setNewOwnerSubmissionPrice('')
+    } catch (err) {
+      setOwnerSubmissionItemError(err instanceof Error ? err.message : 'Could not add this item.')
+    } finally {
+      setAddingOwnerSubmissionItem(false)
+    }
+  }
+
+  async function handleToggleOwnerSubmissionItem(item: OwnerSubmissionItem) {
+    const active = !item.active
+    try {
+      await setOwnerSubmissionItemActive(item.id, active)
+      setOwnerSubmissionItems((previous) => previous.map((i) => (i.id === item.id ? { ...i, active } : i)))
+    } catch (err) {
+      setOwnerSubmissionItemError(err instanceof Error ? err.message : 'Could not update this item.')
+    }
+  }
+
+  async function handleAddOwnerSubmission(input: {
+    category: OwnerSubmissionCategory
+    clientId: string
+    entryDate: string
+    itemId: string
+    gross: number
+  }) {
+    const created = await addOwnerSubmission(input)
+    setOwnerSubmissions((previous) => [...previous, created])
+  }
+
+  async function handleDeleteOwnerSubmission(entryId: string) {
+    await deleteOwnerSubmission(entryId)
+    setOwnerSubmissions((previous) => previous.filter((entry) => entry.id !== entryId))
+  }
+
+  async function handleCreateOwnerSubmissionInvoice(client: Client): Promise<OwnerSubmissionInvoice> {
+    const entries = ownerSubmissions.filter((entry) => entry.client_id === client.id)
+    const cutFor = (category: OwnerSubmissionCategory) =>
+      entries.filter((entry) => entry.category === category).reduce((sum, entry) => sum + entry.owner_cut, 0)
+
+    const subscriptionsOwnerCut = cutFor('subscriptions')
+    const tipsOwnerCut = cutFor('tips')
+    const livestreamsOwnerCut = cutFor('livestreams')
+    const ownerSubmissionsCut = subscriptionsOwnerCut + tipsOwnerCut + livestreamsOwnerCut
+    const clientInvoiceOwnerCut =
+      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
+        ?.owner_cut ?? 0
+
+    const created = await createOwnerSubmissionInvoice({
+      clientId: client.id,
+      weekStart: currentWeekStart,
+      weekEnd: currentWeekEnd,
+      subscriptionsOwnerCut,
+      tipsOwnerCut,
+      livestreamsOwnerCut,
+      ownerSubmissionsCut,
+      clientInvoiceOwnerCut,
+      combinedOwnerCut: ownerSubmissionsCut + clientInvoiceOwnerCut,
+    })
+    setOwnerSubmissionInvoices((previous) => [created, ...previous])
+    return created
+  }
+
+  async function handleSendOwnerSubmissionInvoice(invoiceId: string) {
+    await markOwnerSubmissionInvoiceDealtWith(invoiceId)
+    setOwnerSubmissionInvoices((previous) =>
+      previous.map((invoice) => (invoice.id === invoiceId ? { ...invoice, dealt_with: true } : invoice)),
+    )
+  }
+
+  function handleDownloadOwnerInvoicePdf(client: Client) {
+    const clientInvoiceOwnerCut =
+      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
+        ?.owner_cut ?? 0
+    const clientOwnerSubmissions = ownerSubmissions.filter((entry) => entry.client_id === client.id)
+    const ownerSubmissionsCut = clientOwnerSubmissions.reduce((sum, entry) => sum + entry.owner_cut, 0)
+
+    generateOwnerInvoicePdf({
+      clientName: client.name,
+      weekStart: currentWeekStart,
+      weekEnd: currentWeekEnd,
+      ownerSubmissionsCut,
+      clientInvoiceOwnerCut,
+      combinedOwnerCut: ownerSubmissionsCut + clientInvoiceOwnerCut,
+      saleEntries: weekEntries.filter((entry) => entry.client_id === client.id),
+      saleTypes,
+      ownerSubmissions: clientOwnerSubmissions,
+      ownerSubmissionItems,
+    })
+  }
+
   return (
     <div className="app-shell">
       <PortalHeader portalLabel="Owner portal" userName={profile.full_name} onSignOut={signOut} />
@@ -531,6 +754,17 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onNewSaleTypeLabelChange={setNewSaleTypeLabel}
               onAddSaleType={handleAddSaleType}
               onToggleSaleType={handleToggleSaleType}
+              ownerSubmissionItems={ownerSubmissionItems}
+              newOwnerSubmissionCategory={newOwnerSubmissionCategory}
+              newOwnerSubmissionLabel={newOwnerSubmissionLabel}
+              newOwnerSubmissionPrice={newOwnerSubmissionPrice}
+              addingOwnerSubmissionItem={addingOwnerSubmissionItem}
+              ownerSubmissionItemError={ownerSubmissionItemError}
+              onNewOwnerSubmissionCategoryChange={setNewOwnerSubmissionCategory}
+              onNewOwnerSubmissionLabelChange={setNewOwnerSubmissionLabel}
+              onNewOwnerSubmissionPriceChange={setNewOwnerSubmissionPrice}
+              onAddOwnerSubmissionItem={handleAddOwnerSubmissionItem}
+              onToggleOwnerSubmissionItem={handleToggleOwnerSubmissionItem}
             />
           )}
 
@@ -569,6 +803,23 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               currentWeekStart={currentWeekStart}
               selectedClientId={selectedClientId}
               onSelectClient={setSelectedClientId}
+              onViewInvoice={(invoiceId) => setViewedInvoiceId(invoiceId)}
+            />
+          )}
+
+          {activeTab === 'ownerSubmissions' && (
+            <OwnerSubmissionsTab
+              activeClients={activeClients}
+              ownerSubmissionItems={ownerSubmissionItems}
+              ownerSubmissions={ownerSubmissions}
+              ownerSubmissionInvoices={ownerSubmissionInvoices}
+              clientInvoices={clientInvoices}
+              currentWeekStart={currentWeekStart}
+              currentWeekEnd={currentWeekEnd}
+              onAddOwnerSubmission={handleAddOwnerSubmission}
+              onDeleteOwnerSubmission={handleDeleteOwnerSubmission}
+              onOpenInvoice={(client) => setSelectedOwnerSubmissionClientId(client.id)}
+              missingWorkerNamesForClient={missingWorkerNamesForClient}
             />
           )}
 
@@ -601,6 +852,40 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           onClose={() => setSelectedClientId(null)}
           onCreateInvoice={() => handleCreateClientInvoice(selectedClient)}
           onSendInvoice={handleSendClientInvoice}
+        />
+      )}
+
+      {viewedInvoice && (
+        <ClientInvoiceModal
+          clientName={viewedInvoiceClientName}
+          weekStart={viewedInvoice.week_start}
+          weekEnd={viewedInvoice.week_end}
+          entries={viewedInvoiceEntries}
+          workers={workers}
+          existingInvoice={viewedInvoice}
+          onClose={() => setViewedInvoiceId(null)}
+          onCreateInvoice={() => Promise.resolve(viewedInvoice)}
+          onSendInvoice={handleSendClientInvoice}
+        />
+      )}
+
+      {selectedOwnerSubmissionClient && (
+        <OwnerSubmissionInvoiceModal
+          clientName={selectedOwnerSubmissionClient.name}
+          weekStart={currentWeekStart}
+          weekEnd={currentWeekEnd}
+          subscriptionsOwnerCut={selectedOwnerSubmissionsCutBySection.subscriptions}
+          tipsOwnerCut={selectedOwnerSubmissionsCutBySection.tips}
+          livestreamsOwnerCut={selectedOwnerSubmissionsCutBySection.livestreams}
+          ownerSubmissionsCut={selectedOwnerSubmissionsCut}
+          clientInvoiceOwnerCut={selectedOwnerSubmissionClientInvoice?.owner_cut ?? 0}
+          hasClientInvoice={selectedOwnerSubmissionClientInvoice !== null}
+          existingInvoice={selectedOwnerSubmissionInvoice}
+          missingWorkerNames={selectedOwnerSubmissionMissingWorkers}
+          onClose={() => setSelectedOwnerSubmissionClientId(null)}
+          onCreateInvoice={() => handleCreateOwnerSubmissionInvoice(selectedOwnerSubmissionClient)}
+          onSendInvoice={handleSendOwnerSubmissionInvoice}
+          onDownloadPdf={() => handleDownloadOwnerInvoicePdf(selectedOwnerSubmissionClient)}
         />
       )}
     </div>

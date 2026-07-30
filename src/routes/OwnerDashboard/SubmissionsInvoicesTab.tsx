@@ -20,6 +20,7 @@ export function SubmissionsInvoicesTab({
   currentWeekStart,
   selectedClientId,
   onSelectClient,
+  onViewInvoice,
 }: {
   workers: Profile[]
   submissions: Submission[]
@@ -35,6 +36,7 @@ export function SubmissionsInvoicesTab({
   currentWeekStart: string
   selectedClientId: string | null
   onSelectClient: (clientId: string) => void
+  onViewInvoice: (invoiceId: string) => void
 }) {
   return (
     <>
@@ -149,6 +151,7 @@ export function SubmissionsInvoicesTab({
 
         <div className="table-header">
           <h3>Invoice history</h3>
+          <p>Click a row to review the full breakdown behind that week's figures.</p>
         </div>
         <div className="table-wrapper">
           <table className="submission-table">
@@ -162,7 +165,7 @@ export function SubmissionsInvoicesTab({
             </thead>
             <tbody>
               {clientInvoices.map((invoice) => (
-                <tr key={invoice.id}>
+                <tr key={invoice.id} className="submission-row" onClick={() => onViewInvoice(invoice.id)}>
                   <td>{clients.find((c) => c.id === invoice.client_id)?.name ?? 'Unknown client'}</td>
                   <td>{formatWeekRange(invoice.week_start, invoice.week_end)}</td>
                   <td>{formatCurrency(invoice.client_payout)}</td>

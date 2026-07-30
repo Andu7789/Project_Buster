@@ -798,11 +798,55 @@ a:focus-visible {
 }
 
 .entry-client {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  padding: 16px 20px 20px;
+  border: 1px solid var(--client-border);
+  border-radius: var(--radius-md);
+  background: var(--client-bg);
+}
+
+.entry-client-0 {
+  --client-bg: #eef1fc;
+  --client-border: #d9e0f5;
+}
+
+.entry-client-1 {
+  --client-bg: #fdece0;
+  --client-border: #f6d9b8;
+}
+
+.entry-client-2 {
+  --client-bg: #e6f5ec;
+  --client-border: #c9e8d4;
+}
+
+.entry-client-3 {
+  --client-bg: #f8e8f2;
+  --client-border: #edd0e3;
+}
+
+.entry-client-4 {
+  --client-bg: #fdf6df;
+  --client-border: #f0e0a8;
 }
 
 .entry-client h3 {
   margin: 0 0 10px;
+}
+
+.entry-client .detail-table th {
+  background: var(--surface);
+}
+
+.entry-client .detail-table {
+  background: var(--surface);
+  border: 1px solid var(--client-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.entry-client .table-wrapper {
+  border-radius: var(--radius-sm);
 }
 
 .entry-section {
@@ -828,6 +872,27 @@ a:focus-visible {
   font-size: 0.82rem;
   color: var(--ink-muted);
   white-space: nowrap;
+}
+
+.owner-submission-add-row {
+  display: grid;
+  grid-template-columns: 150px minmax(160px, 1fr) auto 110px auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.owner-submission-override {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.owner-submission-override input {
+  width: auto;
 }
 
 /* Chart tooltip */
@@ -902,12 +967,12 @@ a:focus-visible {
 
 .tab-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   background: var(--surface-tint);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 6px;
-  overflow-x: auto;
   margin-bottom: 4px;
 }
 

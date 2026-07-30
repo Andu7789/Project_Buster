@@ -1,4 +1,4 @@
-import type { Client, SaleEntry, SaleSection } from '../types'
+import type { Client, OwnerSubmissionCategory, SaleEntry, SaleSection } from '../types'
 
 export const NET_RATE = 0.8
 
@@ -40,6 +40,18 @@ export function clientPayoutTotal(entries: SaleEntry[]): number {
     (sum, section) => sum + calcClientPayout(netBySection[section], section),
     0,
   )
+}
+
+export const ownerSubmissionCategoryLabel: Record<OwnerSubmissionCategory, string> = {
+  subscriptions: 'Subscriptions',
+  tips: 'Tips',
+  livestreams: 'Livestreams',
+}
+
+export const OWNER_SUBMISSION_OWNER_RATE = 0.4
+
+export function calcOwnerSubmissionCut(net: number): number {
+  return net * OWNER_SUBMISSION_OWNER_RATE
 }
 
 export interface ClientEarningsTotal {

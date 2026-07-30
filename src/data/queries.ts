@@ -1,10 +1,14 @@
 import { supabase } from '../lib/supabase'
-import { calcEarnings, calcNet } from '../lib/earnings'
+import { calcEarnings, calcNet, calcOwnerSubmissionCut } from '../lib/earnings'
 import type {
   CalendarEvent,
   Client,
   ClientInvoice,
   DevRequest,
+  OwnerSubmission,
+  OwnerSubmissionCategory,
+  OwnerSubmissionInvoice,
+  OwnerSubmissionItem,
   Profile,
   ProfileStatus,
   RequestComment,
@@ -511,6 +515,136 @@ export async function createClientInvoice(input: {
 export async function markClientInvoiceDealtWith(invoiceId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_client_invoices').update({ dealt_with: true }).eq('id', invoiceId)
+  if (error) throw error
+}
+
+export async function listOwnerSubmissionItems(): Promise<OwnerSubmissionItem[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_owner_submission_items')
+    .select('*')
+    .order('label', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as OwnerSubmissionItem[]
+}
+
+export async function addOwnerSubmissionItem(input: {
+  category: OwnerSubmissionCategory
+  label: string
+  price: number
+}): Promise<OwnerSubmissionItem> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_owner_submission_items')
+    .insert({ category: input.category, label: input.label.trim(), price: input.price })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as OwnerSubmissionItem
+}
+
+export async function setOwnerSubmissionItemActive(itemId: string, active: boolean): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_owner_submission_items').update({ active }).eq('id', itemId)
+  if (error) throw error
+}
+
+export async function listOwnerSubmissionsForRange(startDate: string, endDate: string): Promise<OwnerSubmission[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_owner_submissions')
+    .select('*')
+    .gte('entry_date', startDate)
+    .lte('entry_date', endDate)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as OwnerSubmission[]
+}
+
+export async function addOwnerSubmission(input: {
+  category: OwnerSubmissionCategory
+  clientId: string | null
+  entryDate: string
+  itemId: string
+  gross: number
+}): Promise<OwnerSubmission> {
+  const client = requireClient()
+  const net = calcNet(input.gross)
+  const ownerCut = calcOwnerSubmissionCut(net)
+
+  const { data, error } = await client
+    .from('buster_owner_submissions')
+    .insert({
+      category: input.category,
+      client_id: input.clientId,
+      entry_date: input.entryDate,
+      item_id: input.itemId,
+      gross: input.gross,
+      net,
+      owner_cut: ownerCut,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as OwnerSubmission
+}
+
+export async function deleteOwnerSubmission(submissionId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_owner_submissions').delete().eq('id', submissionId)
+  if (error) throw error
+}
+
+export async function listOwnerSubmissionInvoices(): Promise<OwnerSubmissionInvoice[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_owner_submission_invoices')
+    .select('*')
+    .order('week_start', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as OwnerSubmissionInvoice[]
+}
+
+export async function createOwnerSubmissionInvoice(input: {
+  clientId: string
+  weekStart: string
+  weekEnd: string
+  subscriptionsOwnerCut: number
+  tipsOwnerCut: number
+  livestreamsOwnerCut: number
+  ownerSubmissionsCut: number
+  clientInvoiceOwnerCut: number
+  combinedOwnerCut: number
+}): Promise<OwnerSubmissionInvoice> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_owner_submission_invoices')
+    .insert({
+      client_id: input.clientId,
+      week_start: input.weekStart,
+      week_end: input.weekEnd,
+      subscriptions_owner_cut: input.subscriptionsOwnerCut,
+      tips_owner_cut: input.tipsOwnerCut,
+      livestreams_owner_cut: input.livestreamsOwnerCut,
+      owner_submissions_cut: input.ownerSubmissionsCut,
+      client_invoice_owner_cut: input.clientInvoiceOwnerCut,
+      combined_owner_cut: input.combinedOwnerCut,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as OwnerSubmissionInvoice
+}
+
+export async function markOwnerSubmissionInvoiceDealtWith(invoiceId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_owner_submission_invoices').update({ dealt_with: true }).eq('id', invoiceId)
   if (error) throw error
 }
 

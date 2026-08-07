@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatWeekRange } from './dates'
 import { calcOwnerCut, ownerSubmissionCategoryLabel, sectionLabel } from './earnings'
-import type { OwnerSubmission, OwnerSubmissionItem, SaleEntry, SaleType } from '../types'
+import type { OwnerSubmission, SaleEntry, SaleType } from '../types'
 
 function formatGbp(usdAmount: number, rate: number): string {
   return `£${(usdAmount * rate).toFixed(2)}`
@@ -34,7 +34,6 @@ export function generateOwnerInvoicePdf(input: {
   saleEntries: SaleEntry[]
   saleTypes: SaleType[]
   ownerSubmissions: OwnerSubmission[]
-  ownerSubmissionItems: OwnerSubmissionItem[]
   exchangeRate: number
   exchangeRateDate: string
 }): void {
@@ -84,49 +83,46 @@ export function generateOwnerInvoicePdf(input: {
   doc.setFontSize(14)
   doc.text(`Contractor entries (Sexting/Customs) — ${input.clientName}`, 14, 20)
 
-  autoTable(doc, {
-    startY: 28,
-    head: [['Date', 'Category', 'Description', 'Gross', 'Net', 'Owner cut']],
-    body: rowsToBody(saleRows, rate),
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [53, 104, 168] },
-  })
-
   if (saleRows.length === 0) {
     doc.setFontSize(10)
-    doc.text('No contractor entries recorded for this client this week.', 14, 34)
+    doc.text('No contractor entries recorded for this client this week.', 14, 28)
+  } else {
+    autoTable(doc, {
+      startY: 28,
+      head: [['Date', 'Category', 'Description', 'Gross', 'Net', 'Owner cut']],
+      body: rowsToBody(saleRows, rate),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [53, 104, 168] },
+    })
   }
 
   // Page three - owner submissions (Subscriptions/Tips/Livestreams), same shape, kept separate.
   const ownerSubmissionRows: BreakdownRow[] = input.ownerSubmissions
-    .map((entry) => {
-      const item = input.ownerSubmissionItems.find((i) => i.id === entry.item_id)
-      return {
-        date: entry.entry_date,
-        category: ownerSubmissionCategoryLabel[entry.category],
-        description: item?.label ?? 'Unknown item',
-        gross: entry.gross,
-        net: entry.net,
-        ownerCut: entry.owner_cut,
-      }
-    })
+    .map((entry) => ({
+      date: entry.entry_date,
+      category: ownerSubmissionCategoryLabel[entry.category],
+      description: entry.buyer_username,
+      gross: entry.gross,
+      net: entry.net,
+      ownerCut: entry.owner_cut,
+    }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
   doc.addPage()
   doc.setFontSize(14)
   doc.text(`Owner submissions (Subscriptions/Tips/Livestreams) — ${input.clientName}`, 14, 20)
 
-  autoTable(doc, {
-    startY: 28,
-    head: [['Date', 'Category', 'Description', 'Gross', 'Net', 'Owner cut']],
-    body: rowsToBody(ownerSubmissionRows, rate),
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [53, 104, 168] },
-  })
-
   if (ownerSubmissionRows.length === 0) {
     doc.setFontSize(10)
-    doc.text('No owner submissions recorded for this client this week.', 14, 34)
+    doc.text('No owner submissions recorded for this client this week.', 14, 28)
+  } else {
+    autoTable(doc, {
+      startY: 28,
+      head: [['Date', 'Category', 'Description', 'Gross', 'Net', 'Owner cut']],
+      body: rowsToBody(ownerSubmissionRows, rate),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [53, 104, 168] },
+    })
   }
 
   doc.save(`owner-invoice-${input.clientName.replace(/\s+/g, '-').toLowerCase()}-${input.weekStart}.pdf`)

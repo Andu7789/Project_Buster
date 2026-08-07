@@ -83,27 +83,29 @@ export function LearnersTrainingTab({
                   <td>
                     <ProfileStatusBadge status={learner.status} />
                   </td>
-                  <td className="roster-actions">
-                    {learner.status === 'active' && (
-                      <button type="button" className="btn-outline" onClick={() => onLearnerStatusChange(learner.id, 'suspended')}>
-                        Suspend
-                      </button>
-                    )}
-                    {learner.status === 'suspended' && (
-                      <button type="button" className="btn-outline" onClick={() => onLearnerStatusChange(learner.id, 'active')}>
-                        Reactivate
-                      </button>
-                    )}
-                    {learner.status !== 'removed' && (
-                      <button type="button" className="btn-danger" onClick={() => onRemoveLearner(learner)}>
-                        Remove
-                      </button>
-                    )}
-                    {learner.status === 'removed' && (
-                      <button type="button" className="btn-danger" onClick={() => onDeleteLearner(learner)}>
-                        Delete permanently
-                      </button>
-                    )}
+                  <td>
+                    <div className="roster-actions">
+                      {learner.status === 'active' && (
+                        <button type="button" className="btn-outline" onClick={() => onLearnerStatusChange(learner.id, 'suspended')}>
+                          Suspend
+                        </button>
+                      )}
+                      {learner.status === 'suspended' && (
+                        <button type="button" className="btn-outline" onClick={() => onLearnerStatusChange(learner.id, 'active')}>
+                          Reactivate
+                        </button>
+                      )}
+                      {learner.status !== 'removed' && (
+                        <button type="button" className="btn-danger" onClick={() => onRemoveLearner(learner)}>
+                          Remove
+                        </button>
+                      )}
+                      {learner.status === 'removed' && (
+                        <button type="button" className="btn-danger" onClick={() => onDeleteLearner(learner)}>
+                          Delete permanently
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

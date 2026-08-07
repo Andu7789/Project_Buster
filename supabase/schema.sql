@@ -138,10 +138,11 @@ create table if not exists buster_request_comments (
   created_at timestamptz not null default now()
 );
 
--- Owner-managed price list for the three owner-direct revenue streams (not
--- entered by workers): Subscriptions, Tips, Livestreams. One table with a
--- category column, same shape as buster_sale_entries.section handling
--- Sexting/Customs.
+-- Owner-managed price list originally used by buster_owner_submissions
+-- below (a dropdown of preset items). No longer written or read by the
+-- app - owner submissions moved to free-form username + amount entry - but
+-- left in place rather than dropped, since it's harmless and existing rows
+-- aren't referenced by anything anymore after the migration just below.
 create table if not exists buster_owner_submission_items (
   id uuid primary key default gen_random_uuid(),
   category text not null check (category in ('subscriptions', 'tips', 'livestreams')),
@@ -159,12 +160,25 @@ create table if not exists buster_owner_submissions (
   category text not null check (category in ('subscriptions', 'tips', 'livestreams')),
   client_id uuid references buster_clients(id),
   entry_date date not null,
-  item_id uuid not null references buster_owner_submission_items(id),
+  item_id uuid references buster_owner_submission_items(id),
   gross numeric not null check (gross >= 0),
   net numeric not null,
   owner_cut numeric not null,
   created_at timestamptz not null default now()
 );
+
+-- Migration: replace the preset item_id dropdown with a free-form
+-- buyer_username (mirrors buster_sale_entries.buyer_username) plus a
+-- per-entry owner-cut % override entered at submission time - backfill
+-- existing rows from their old item's label first so history isn't lost,
+-- then drop item_id since nothing needs it once that backfill has run.
+alter table buster_owner_submissions add column if not exists buyer_username text;
+update buster_owner_submissions os
+  set buyer_username = coalesce((select label from buster_owner_submission_items where id = os.item_id), 'Unknown')
+  where buyer_username is null;
+alter table buster_owner_submissions alter column buyer_username set default '';
+alter table buster_owner_submissions alter column buyer_username set not null;
+alter table buster_owner_submissions drop column if exists item_id;
 
 -- Weekly per-client finalization of the 3 owner-submission categories above,
 -- combined with that week's buster_client_invoices owner_cut for the same
@@ -263,7 +277,11 @@ grant execute on function buster_claim_profile() to authenticated;
 -- has to be security-definer because owners have no RLS delete grant on
 -- buster_training_progress or buster_sale_entries (only learners/workers can
 -- delete their own rows there) and because buster_submissions has no owner
--- delete policy at all.
+-- delete policy at all. Also clears buster_requests/buster_request_comments
+-- authored by the target - needed since this now also deletes owner profiles
+-- (Account tab), and created_by/author_id have no cascade, so an owner who'd
+-- ever raised or commented on a request would otherwise fail here with a
+-- foreign-key violation.
 create or replace function buster_delete_profile(target_id uuid)
 returns void
 language plpgsql
@@ -281,11 +299,45 @@ begin
   delete from buster_training_progress where learner_id = target_id;
   delete from buster_submissions where worker_id = target_id;
   delete from buster_sale_entries where worker_id = target_id;
+  delete from buster_request_comments where author_id = target_id;
+  delete from buster_requests where created_by = target_id;
   delete from buster_profiles where id = target_id;
 end;
 $$;
 
 grant execute on function buster_delete_profile(uuid) to authenticated;
+
+-- Owner-triggered permanent delete of a single weekly submission, plus the
+-- underlying buster_sale_entries rows for that worker/week (so it also
+-- disappears from the worker's own timesheet history). Same
+-- security-definer shape as buster_delete_profile() above, for the same
+-- reason: buster_submissions has no owner delete policy at all.
+create or replace function buster_delete_submission(target_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  target buster_submissions%rowtype;
+begin
+  if not buster_is_owner() then
+    raise exception 'Only an owner can delete a submission.';
+  end if;
+
+  select * into target from buster_submissions where id = target_id;
+  if not found then
+    raise exception 'Submission not found.';
+  end if;
+
+  delete from buster_sale_entries
+    where worker_id = target.worker_id
+      and entry_date between target.week_start and target.week_end;
+
+  delete from buster_submissions where id = target_id;
+end;
+$$;
+
+grant execute on function buster_delete_submission(uuid) to authenticated;
 
 alter table buster_profiles enable row level security;
 alter table buster_submissions enable row level security;

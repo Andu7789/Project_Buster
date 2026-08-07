@@ -17,7 +17,7 @@ import {
   getWeekDates,
   isWithinGracePeriod,
 } from '../lib/dates'
-import { earningsByClient } from '../lib/earnings'
+import { breakdownByClientAndSection, earningsByClient, sectionLabel } from '../lib/earnings'
 import type { Client, Profile, SaleEntry, SaleType, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { SubmissionStatusBadge } from '../components/StatusBadge'
@@ -39,6 +39,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   const [message, setMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
+  const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   const { weekStart, weekEnd } = useMemo(() => getCurrentWeekRange(), [])
@@ -111,6 +112,31 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   )
 
   const selectedSubmission = submissions.find((submission) => submission.id === selectedSubmissionId) ?? null
+
+  useEffect(() => {
+    if (!selectedSubmission) return
+    let cancelled = false
+    listSaleEntriesForWorker(profile.id, selectedSubmission.week_start, selectedSubmission.week_end)
+      .then((data) => {
+        if (!cancelled) setSelectedSubmissionEntries(data)
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedSubmissionEntries([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedSubmission, profile.id])
+
+  const selectedSubmissionClientTotals = useMemo(
+    () => earningsByClient(selectedSubmissionEntries, clients),
+    [selectedSubmissionEntries, clients],
+  )
+  const selectedSubmissionBreakdown = useMemo(
+    () => breakdownByClientAndSection(selectedSubmissionEntries, clients),
+    [selectedSubmissionEntries, clients],
+  )
+
   const selectedIsPreviousWeek = selectedDate !== null && previousWeekDates.includes(selectedDate)
   const selectedWeekDates = selectedIsPreviousWeek ? previousWeekDates : weekDates
   const selectedDayIndex = selectedDate ? selectedWeekDates.indexOf(selectedDate) : -1
@@ -417,6 +443,62 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
                   <td>{formatCurrency(amount)}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+
+          <h3>Earnings by client</h3>
+          <table className="detail-table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Total earnings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedSubmissionClientTotals.map((row) => (
+                <tr key={row.clientName}>
+                  <td>{row.clientName}</td>
+                  <td>{formatCurrency(row.earnings)}</td>
+                </tr>
+              ))}
+              {selectedSubmissionClientTotals.length === 0 && (
+                <tr>
+                  <td colSpan={2} className="empty-row">
+                    No line items recorded for this week.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <h3>Full breakdown</h3>
+          <table className="detail-table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Section</th>
+                <th>Gross</th>
+                <th>Net</th>
+                <th>Earnings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedSubmissionBreakdown.map((row) => (
+                <tr key={`${row.clientName}:${row.section}`}>
+                  <td>{row.clientName}</td>
+                  <td>{sectionLabel[row.section]}</td>
+                  <td>{formatCurrency(row.gross)}</td>
+                  <td>{formatCurrency(row.net)}</td>
+                  <td>{formatCurrency(row.earnings)}</td>
+                </tr>
+              ))}
+              {selectedSubmissionBreakdown.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="empty-row">
+                    No line items recorded for this week.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
 

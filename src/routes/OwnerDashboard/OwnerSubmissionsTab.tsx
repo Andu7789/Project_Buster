@@ -1,57 +1,85 @@
 import { useState } from 'react'
 import { formatCurrency, formatWeekRange, toISODate } from '../../lib/dates'
-import { calcNet, calcOwnerSubmissionCut, ownerSubmissionCategoryLabel } from '../../lib/earnings'
+import { OWNER_SUBMISSION_OWNER_RATE, calcNet, calcOwnerSubmissionCut, ownerSubmissionCategoryLabel } from '../../lib/earnings'
 import { SubmissionStatusBadge } from '../../components/StatusBadge'
-import type { Client, ClientInvoice, OwnerSubmission, OwnerSubmissionCategory, OwnerSubmissionInvoice, OwnerSubmissionItem } from '../../types'
+import type { Client, ClientInvoice, OwnerSubmission, OwnerSubmissionCategory, OwnerSubmissionInvoice, PendingContractor } from '../../types'
+
+function pendingContractorLabel(contractor: PendingContractor): string {
+  return contractor.status === 'not_submitted'
+    ? `${contractor.name} (not submitted)`
+    : `${contractor.name} (awaiting confirmation)`
+}
 
 const categories: OwnerSubmissionCategory[] = ['subscriptions', 'tips', 'livestreams']
+const defaultPercentDraft = String(OWNER_SUBMISSION_OWNER_RATE * 100)
 
 function OwnerSubmissionCategoryTable({
   category,
   client,
-  items,
   entries,
   onAdd,
   onDelete,
 }: {
   category: OwnerSubmissionCategory
   client: Client
-  items: OwnerSubmissionItem[]
   entries: OwnerSubmission[]
-  onAdd: (input: { category: OwnerSubmissionCategory; clientId: string; entryDate: string; itemId: string; gross: number }) => Promise<void>
+  onAdd: (input: {
+    category: OwnerSubmissionCategory
+    clientId: string
+    entryDate: string
+    buyerUsername: string
+    gross: number
+    ownerCutPercent?: number
+  }) => Promise<void>
   onDelete: (entryId: string) => Promise<void>
 }) {
   const [entryDate, setEntryDate] = useState(() => toISODate(new Date()))
-  const [itemId, setItemId] = useState(items[0]?.id ?? '')
-  const [overridePrice, setOverridePrice] = useState(false)
+  const [buyerUsername, setBuyerUsername] = useState('')
   const [grossDraft, setGrossDraft] = useState('')
+  const [overridePercent, setOverridePercent] = useState(false)
+  const [percentDraft, setPercentDraft] = useState(defaultPercentDraft)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const selectedItem = items.find((item) => item.id === itemId) ?? null
-  const grossValue = overridePrice ? Number(grossDraft) : selectedItem?.price ?? 0
-  const hasValidGross = overridePrice ? grossDraft.trim() !== '' && Number.isFinite(grossValue) && grossValue >= 0 : selectedItem !== null
+  const grossValue = Number(grossDraft)
+  const hasValidGross = grossDraft.trim() !== '' && Number.isFinite(grossValue) && grossValue >= 0
+  const percentValue = Number(percentDraft)
+  const hasValidPercent = !overridePercent || (percentDraft.trim() !== '' && Number.isFinite(percentValue) && percentValue >= 0)
   const previewNet = hasValidGross ? calcNet(grossValue) : null
-  const previewOwnerCut = previewNet !== null ? calcOwnerSubmissionCut(previewNet) : null
+  const previewOwnerCut =
+    previewNet !== null && hasValidPercent ? calcOwnerSubmissionCut(previewNet, overridePercent ? percentValue : undefined) : null
 
   const subtotal = entries.reduce((sum, entry) => sum + entry.owner_cut, 0)
 
   async function handleAdd() {
     setError(null)
-    if (!itemId) {
-      setError('Choose an item.')
+    if (!buyerUsername.trim()) {
+      setError('Enter a username.')
       return
     }
     if (!hasValidGross) {
-      setError('Enter a valid gross amount.')
+      setError('Enter a valid amount.')
+      return
+    }
+    if (!hasValidPercent) {
+      setError('Enter a valid override %.')
       return
     }
 
     setSaving(true)
     try {
-      await onAdd({ category, clientId: client.id, entryDate, itemId, gross: grossValue })
+      await onAdd({
+        category,
+        clientId: client.id,
+        entryDate,
+        buyerUsername,
+        gross: grossValue,
+        ownerCutPercent: overridePercent ? percentValue : undefined,
+      })
+      setBuyerUsername('')
       setGrossDraft('')
-      setOverridePrice(false)
+      setOverridePercent(false)
+      setPercentDraft(defaultPercentDraft)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add this entry.')
     } finally {
@@ -75,7 +103,7 @@ function OwnerSubmissionCategoryTable({
           <thead>
             <tr>
               <th>Date</th>
-              <th>Item</th>
+              <th>Username</th>
               <th>Gross</th>
               <th>Net</th>
               <th>Owner cut</th>
@@ -86,7 +114,7 @@ function OwnerSubmissionCategoryTable({
             {entries.map((entry) => (
               <tr key={entry.id}>
                 <td>{entry.entry_date}</td>
-                <td>{items.find((item) => item.id === entry.item_id)?.label ?? '—'}</td>
+                <td>{entry.buyer_username}</td>
                 <td>{formatCurrency(entry.gross)}</td>
                 <td>{formatCurrency(entry.net)}</td>
                 <td>{formatCurrency(entry.owner_cut)}</td>
@@ -118,51 +146,50 @@ function OwnerSubmissionCategoryTable({
 
       <div className="owner-submission-add-row">
         <input type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} />
-        <select
-          value={itemId}
-          onChange={(event) => {
-            setItemId(event.target.value)
-            setOverridePrice(false)
-            setGrossDraft('')
-          }}
-        >
-          {items.length === 0 && <option value="">No items configured</option>}
-          {items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label} — {formatCurrency(item.price)}
-            </option>
-          ))}
-        </select>
+        <input
+          type="text"
+          className="gross-input"
+          placeholder="Username"
+          value={buyerUsername}
+          onChange={(event) => setBuyerUsername(event.target.value)}
+        />
+        <input
+          type="number"
+          className="gross-input"
+          min="0"
+          step="0.01"
+          placeholder="Amount"
+          value={grossDraft}
+          onChange={(event) => setGrossDraft(event.target.value)}
+        />
         <label className="owner-submission-override">
           <input
             type="checkbox"
-            checked={overridePrice}
+            checked={overridePercent}
             onChange={(event) => {
-              setOverridePrice(event.target.checked)
-              setGrossDraft(event.target.checked ? String(selectedItem?.price ?? '') : '')
+              setOverridePercent(event.target.checked)
+              setPercentDraft(defaultPercentDraft)
             }}
           />
-          Override price
+          Override %
         </label>
-        {overridePrice ? (
-          <input
-            type="number"
-            className="gross-input"
-            min="0"
-            step="0.01"
-            placeholder="Gross"
-            value={grossDraft}
-            onChange={(event) => setGrossDraft(event.target.value)}
-          />
-        ) : (
-          <input type="text" className="gross-input" value={selectedItem ? formatCurrency(selectedItem.price) : ''} disabled />
-        )}
+        <input
+          type="number"
+          className="gross-input"
+          min="0"
+          max="100"
+          step="0.1"
+          placeholder="Override %"
+          value={overridePercent ? percentDraft : ''}
+          disabled={!overridePercent}
+          onChange={(event) => setPercentDraft(event.target.value)}
+        />
         <span className="entry-preview">
           {previewNet !== null && previewOwnerCut !== null
             ? `Net ${formatCurrency(previewNet)} · Owner cut ${formatCurrency(previewOwnerCut)}`
             : ''}
         </span>
-        <button type="button" className="btn-outline" onClick={handleAdd} disabled={saving || items.length === 0}>
+        <button type="button" className="btn-outline" onClick={handleAdd} disabled={saving}>
           {saving ? 'Adding…' : 'Add'}
         </button>
       </div>
@@ -173,7 +200,6 @@ function OwnerSubmissionCategoryTable({
 
 export function OwnerSubmissionsTab({
   activeClients,
-  ownerSubmissionItems,
   ownerSubmissions,
   ownerSubmissionInvoices,
   clientInvoices,
@@ -182,10 +208,10 @@ export function OwnerSubmissionsTab({
   onAddOwnerSubmission,
   onDeleteOwnerSubmission,
   onOpenInvoice,
-  missingWorkerNamesForClient,
+  onOpenPastInvoices,
+  pendingContractorsForClient,
 }: {
   activeClients: Client[]
-  ownerSubmissionItems: OwnerSubmissionItem[]
   ownerSubmissions: OwnerSubmission[]
   ownerSubmissionInvoices: OwnerSubmissionInvoice[]
   clientInvoices: ClientInvoice[]
@@ -195,22 +221,21 @@ export function OwnerSubmissionsTab({
     category: OwnerSubmissionCategory
     clientId: string
     entryDate: string
-    itemId: string
+    buyerUsername: string
     gross: number
+    ownerCutPercent?: number
   }) => Promise<void>
   onDeleteOwnerSubmission: (entryId: string) => Promise<void>
   onOpenInvoice: (client: Client) => void
-  missingWorkerNamesForClient: (clientId: string) => string[]
+  onOpenPastInvoices: (client: Client) => void
+  pendingContractorsForClient: (clientId: string) => PendingContractor[]
 }) {
-  const activeItemsByCategory = (category: OwnerSubmissionCategory) =>
-    ownerSubmissionItems.filter((item) => item.category === category && item.active)
-
   return (
     <section className="panel">
       <div className="panel-head">
         <div>
           <h2>Owner Submissions</h2>
-          <p>{formatWeekRange(currentWeekStart, currentWeekEnd)} — log this week's Subscriptions, Tips and Livestreams per client.</p>
+          <p>{formatWeekRange(currentWeekStart, currentWeekEnd)} — log this week's Purchases, Tips and Customs per client.</p>
         </div>
       </div>
 
@@ -219,6 +244,8 @@ export function OwnerSubmissionsTab({
       ) : (
         activeClients.map((client, index) => {
           const clientEntries = ownerSubmissions.filter((entry) => entry.client_id === client.id)
+          const totalGross = clientEntries.reduce((sum, entry) => sum + entry.gross, 0)
+          const totalNet = clientEntries.reduce((sum, entry) => sum + entry.net, 0)
           const ownerSubmissionsCut = clientEntries.reduce((sum, entry) => sum + entry.owner_cut, 0)
           const existingInvoice = ownerSubmissionInvoices.find(
             (invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart,
@@ -226,7 +253,7 @@ export function OwnerSubmissionsTab({
           const clientInvoiceOwnerCut =
             clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
               ?.owner_cut ?? 0
-          const missingWorkerNames = missingWorkerNamesForClient(client.id)
+          const pendingContractors = pendingContractorsForClient(client.id)
 
           return (
             <div key={client.id} className={`entry-client entry-client-${index % 5}`}>
@@ -236,20 +263,28 @@ export function OwnerSubmissionsTab({
                   key={category}
                   category={category}
                   client={client}
-                  items={activeItemsByCategory(category)}
                   entries={clientEntries.filter((entry) => entry.category === category)}
                   onAdd={onAddOwnerSubmission}
                   onDelete={onDeleteOwnerSubmission}
                 />
               ))}
 
+              <h4 className="detail-summary-heading">{client.name} totals this week</h4>
               <div className="detail-summary">
+                <div>
+                  <p className="label">Gross</p>
+                  <strong>{formatCurrency(totalGross)}</strong>
+                </div>
+                <div>
+                  <p className="label">Net</p>
+                  <strong>{formatCurrency(totalNet)}</strong>
+                </div>
                 <div>
                   <p className="label">Owner submissions cut</p>
                   <strong>{formatCurrency(ownerSubmissionsCut)}</strong>
                 </div>
                 <div>
-                  <p className="label">Client invoice owner cut</p>
+                  <p className="label">Contractor invoice - owners cut</p>
                   <strong>{formatCurrency(clientInvoiceOwnerCut)}</strong>
                 </div>
                 <div>
@@ -260,13 +295,16 @@ export function OwnerSubmissionsTab({
                 </div>
               </div>
 
-              {!existingInvoice && missingWorkerNames.length > 0 && (
+              {!existingInvoice && pendingContractors.length > 0 && (
                 <p className="message message-error">
-                  Waiting on this week's timesheet from {missingWorkerNames.join(', ')}.
+                  Not all contractors are finalized yet: {pendingContractors.map(pendingContractorLabel).join(', ')}.
                 </p>
               )}
 
               <div className="modal-actions">
+                <button type="button" className="btn-outline" onClick={() => onOpenPastInvoices(client)}>
+                  Past invoices
+                </button>
                 <button type="button" className="btn-primary" onClick={() => onOpenInvoice(client)}>
                   {existingInvoice ? 'View weekly invoice' : 'Create weekly invoice'}
                 </button>

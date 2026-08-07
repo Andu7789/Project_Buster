@@ -80,7 +80,7 @@ export function SubmissionsInvoicesTab({
           <div className="stack">
             <div className="table-header">
               <h3>{selectedWorker.full_name}</h3>
-              <p>Click a row to see daily amounts and create an invoice.</p>
+              <p>Click a row to see daily amounts and agree the submission.</p>
             </div>
             <div className="table-wrapper">
               <table className="submission-table">
@@ -121,7 +121,7 @@ export function SubmissionsInvoicesTab({
         <div className="panel-head">
           <div>
             <h2>Client invoices</h2>
-            <p>This week's sales per client — create and send their weekly payout invoice.</p>
+            <p>This week's sales per client — check the figures and confirm.</p>
           </div>
         </div>
 
@@ -139,8 +139,8 @@ export function SubmissionsInvoicesTab({
                 >
                   <strong>{client.name}</strong>
                   <p>Client payout: {formatCurrency(clientPayoutTotal(entries))}</p>
-                  <p className={invoice?.dealt_with ? undefined : 'text-danger'}>
-                    {invoice?.dealt_with ? 'Invoiced' : 'Not yet invoiced'}
+                  <p className={!invoice ? 'info-text' : invoice.dealt_with ? undefined : 'text-danger'}>
+                    {!invoice ? 'No invoice yet' : invoice.dealt_with ? 'Confirmed' : 'Not yet checked'}
                   </p>
                 </article>
               </HoverEffectItem>

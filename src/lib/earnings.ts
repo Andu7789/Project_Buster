@@ -43,15 +43,40 @@ export function clientPayoutTotal(entries: SaleEntry[]): number {
 }
 
 export const ownerSubmissionCategoryLabel: Record<OwnerSubmissionCategory, string> = {
-  subscriptions: 'Subscriptions',
+  subscriptions: 'Purchases',
   tips: 'Tips',
-  livestreams: 'Livestreams',
+  livestreams: 'Customs',
 }
 
 export const OWNER_SUBMISSION_OWNER_RATE = 0.4
 
-export function calcOwnerSubmissionCut(net: number): number {
-  return net * OWNER_SUBMISSION_OWNER_RATE
+/** overridePercent, when given, is a whole-number percent (e.g. 25 for 25%) that replaces the default rate for this one entry. */
+export function calcOwnerSubmissionCut(net: number, overridePercent?: number): number {
+  const rate = overridePercent !== undefined ? overridePercent / 100 : OWNER_SUBMISSION_OWNER_RATE
+  return net * rate
+}
+
+/**
+ * Orders client_id keys (plus 'general' for entries with no client) to match
+ * `clients` - the same list/order a worker sees in the day-entry sheet's
+ * client dropdown - so every client-grouped table in the app reads in the
+ * same order as the sheet they filled in. Any key with no match in `clients`
+ * (an unknown/removed client, or 'general') is appended after, in the order
+ * it was first seen.
+ */
+function orderClientKeys(keys: Iterable<string>, clients: Client[]): string[] {
+  const remaining = new Set(keys)
+  const ordered: string[] = []
+  for (const client of clients) {
+    if (remaining.delete(client.id)) ordered.push(client.id)
+  }
+  ordered.push(...remaining)
+  return ordered
+}
+
+function clientNameForKey(key: string, clients: Client[]): string {
+  if (key === 'general') return 'General'
+  return clients.find((c) => c.id === key)?.name ?? 'Unknown client'
 }
 
 export interface ClientEarningsTotal {
@@ -61,18 +86,93 @@ export interface ClientEarningsTotal {
 
 /** Groups a set of sale entries by client, summing each client's `earnings` (the worker's cut). */
 export function earningsByClient(entries: SaleEntry[], clients: Client[]): ClientEarningsTotal[] {
-  const totals = new Map<string, ClientEarningsTotal>()
+  const totals = new Map<string, number>()
   for (const entry of entries) {
     const key = entry.client_id ?? 'general'
-    const existing = totals.get(key)
+    totals.set(key, (totals.get(key) ?? 0) + entry.earnings)
+  }
+  return orderClientKeys(totals.keys(), clients).map((key) => ({
+    clientName: clientNameForKey(key, clients),
+    earnings: totals.get(key)!,
+  }))
+}
+
+export interface ClientSectionBreakdownRow {
+  clientName: string
+  section: SaleSection
+  gross: number
+  net: number
+  earnings: number
+  ownerCut: number
+}
+
+const sectionOrder: SaleSection[] = ['sexting', 'customs']
+
+/** Groups a set of sale entries by client + section (sexting/customs), summing gross/net/earnings/owner cut for each. */
+export function breakdownByClientAndSection(entries: SaleEntry[], clients: Client[]): ClientSectionBreakdownRow[] {
+  const rows = new Map<string, ClientSectionBreakdownRow>()
+  const clientKeys = new Set<string>()
+  for (const entry of entries) {
+    const clientKey = entry.client_id ?? 'general'
+    clientKeys.add(clientKey)
+    const key = `${clientKey}:${entry.section}`
+    const ownerCut = calcOwnerCut(entry.net, entry.section)
+    const existing = rows.get(key)
     if (existing) {
+      existing.gross += entry.gross
+      existing.net += entry.net
       existing.earnings += entry.earnings
+      existing.ownerCut += ownerCut
       continue
     }
-    totals.set(key, {
-      clientName: entry.client_id ? clients.find((c) => c.id === entry.client_id)?.name ?? 'Unknown client' : 'General',
+    rows.set(key, {
+      clientName: clientNameForKey(clientKey, clients),
+      section: entry.section,
+      gross: entry.gross,
+      net: entry.net,
       earnings: entry.earnings,
+      ownerCut,
     })
   }
-  return Array.from(totals.values()).sort((a, b) => b.earnings - a.earnings)
+
+  const ordered: ClientSectionBreakdownRow[] = []
+  for (const clientKey of orderClientKeys(clientKeys, clients)) {
+    for (const section of sectionOrder) {
+      const row = rows.get(`${clientKey}:${section}`)
+      if (row) ordered.push(row)
+    }
+  }
+  return ordered
+}
+
+export interface ClientOwnerCutTotal {
+  clientName: string
+  sexting: number
+  customs: number
+  total: number
+}
+
+/** Groups a set of sale entries by client, summing the owner's cut per section (sexting/customs). */
+export function ownerCutByClient(entries: SaleEntry[], clients: Client[]): ClientOwnerCutTotal[] {
+  const totals = new Map<string, ClientOwnerCutTotal>()
+  for (const entry of entries) {
+    const key = entry.client_id ?? 'general'
+    const cut = calcOwnerCut(entry.net, entry.section)
+    const existing = totals.get(key)
+    if (existing) {
+      existing[entry.section] += cut
+      existing.total += cut
+      continue
+    }
+    const row: ClientOwnerCutTotal = {
+      clientName: clientNameForKey(key, clients),
+      sexting: 0,
+      customs: 0,
+      total: 0,
+    }
+    row[entry.section] += cut
+    row.total += cut
+    totals.set(key, row)
+  }
+  return orderClientKeys(totals.keys(), clients).map((key) => totals.get(key)!)
 }

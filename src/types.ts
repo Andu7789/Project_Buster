@@ -33,6 +33,12 @@ export interface Submission {
   created_at: string
 }
 
+/** A contractor who logged work for a client this week but isn't fully accounted for yet. */
+export interface PendingContractor {
+  name: string
+  status: 'not_submitted' | 'awaiting_confirmation'
+}
+
 export interface Client {
   id: string
   name: string
@@ -87,21 +93,12 @@ export interface ClientInvoice {
 
 export type OwnerSubmissionCategory = 'subscriptions' | 'tips' | 'livestreams'
 
-export interface OwnerSubmissionItem {
-  id: string
-  category: OwnerSubmissionCategory
-  label: string
-  price: number
-  active: boolean
-  created_at: string
-}
-
 export interface OwnerSubmission {
   id: string
   category: OwnerSubmissionCategory
   client_id: string | null
   entry_date: string
-  item_id: string
+  buyer_username: string
   gross: number
   net: number
   owner_cut: number

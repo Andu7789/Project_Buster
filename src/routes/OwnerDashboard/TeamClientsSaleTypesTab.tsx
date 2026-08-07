@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react'
 import { ProfileStatusBadge } from '../../components/StatusBadge'
-import { formatCurrency } from '../../lib/dates'
-import { ownerSubmissionCategoryLabel } from '../../lib/earnings'
-import type { Client, OwnerSubmissionCategory, OwnerSubmissionItem, Profile, ProfileStatus, SaleType } from '../../types'
-
-const ownerSubmissionCategories: OwnerSubmissionCategory[] = ['subscriptions', 'tips', 'livestreams']
+import type { Client, Profile, ProfileStatus, SaleType } from '../../types'
 
 export function TeamClientsSaleTypesTab({
   workers,
@@ -43,17 +39,6 @@ export function TeamClientsSaleTypesTab({
   onNewSaleTypeLabelChange,
   onAddSaleType,
   onToggleSaleType,
-  ownerSubmissionItems,
-  newOwnerSubmissionCategory,
-  newOwnerSubmissionLabel,
-  newOwnerSubmissionPrice,
-  addingOwnerSubmissionItem,
-  ownerSubmissionItemError,
-  onNewOwnerSubmissionCategoryChange,
-  onNewOwnerSubmissionLabelChange,
-  onNewOwnerSubmissionPriceChange,
-  onAddOwnerSubmissionItem,
-  onToggleOwnerSubmissionItem,
 }: {
   workers: Profile[]
   editingShareId: string | null
@@ -91,17 +76,6 @@ export function TeamClientsSaleTypesTab({
   onNewSaleTypeLabelChange: (value: string) => void
   onAddSaleType: (event: FormEvent) => void
   onToggleSaleType: (saleType: SaleType) => void
-  ownerSubmissionItems: OwnerSubmissionItem[]
-  newOwnerSubmissionCategory: OwnerSubmissionCategory
-  newOwnerSubmissionLabel: string
-  newOwnerSubmissionPrice: string
-  addingOwnerSubmissionItem: boolean
-  ownerSubmissionItemError: string | null
-  onNewOwnerSubmissionCategoryChange: (value: OwnerSubmissionCategory) => void
-  onNewOwnerSubmissionLabelChange: (value: string) => void
-  onNewOwnerSubmissionPriceChange: (value: string) => void
-  onAddOwnerSubmissionItem: (event: FormEvent) => void
-  onToggleOwnerSubmissionItem: (item: OwnerSubmissionItem) => void
 }) {
   return (
     <>
@@ -188,27 +162,29 @@ export function TeamClientsSaleTypesTab({
                   <td>
                     <ProfileStatusBadge status={worker.status} />
                   </td>
-                  <td className="roster-actions">
-                    {worker.status === 'active' && (
-                      <button type="button" className="btn-outline" onClick={() => onStatusChange(worker.id, 'suspended')}>
-                        Suspend
-                      </button>
-                    )}
-                    {worker.status === 'suspended' && (
-                      <button type="button" className="btn-outline" onClick={() => onStatusChange(worker.id, 'active')}>
-                        Reactivate
-                      </button>
-                    )}
-                    {worker.status !== 'removed' && (
-                      <button type="button" className="btn-danger" onClick={() => onRemove(worker)}>
-                        Remove
-                      </button>
-                    )}
-                    {worker.status === 'removed' && (
-                      <button type="button" className="btn-danger" onClick={() => onDeleteWorker(worker)}>
-                        Delete permanently
-                      </button>
-                    )}
+                  <td>
+                    <div className="roster-actions">
+                      {worker.status === 'active' && (
+                        <button type="button" className="btn-outline" onClick={() => onStatusChange(worker.id, 'suspended')}>
+                          Suspend
+                        </button>
+                      )}
+                      {worker.status === 'suspended' && (
+                        <button type="button" className="btn-outline" onClick={() => onStatusChange(worker.id, 'active')}>
+                          Reactivate
+                        </button>
+                      )}
+                      {worker.status !== 'removed' && (
+                        <button type="button" className="btn-danger" onClick={() => onRemove(worker)}>
+                          Remove
+                        </button>
+                      )}
+                      {worker.status === 'removed' && (
+                        <button type="button" className="btn-danger" onClick={() => onDeleteWorker(worker)}>
+                          Delete permanently
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -326,90 +302,6 @@ export function TeamClientsSaleTypesTab({
                 <tr>
                   <td colSpan={3} className="empty-row">
                     No types yet — add your first one above.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Owner submission items</h2>
-            <p>Priced items for Subscriptions, Tips and Livestreams — these populate the Owner Submissions tab's dropdowns.</p>
-          </div>
-        </div>
-
-        <form className="add-worker-form" onSubmit={onAddOwnerSubmissionItem}>
-          <label>
-            Category
-            <select
-              value={newOwnerSubmissionCategory}
-              onChange={(event) => onNewOwnerSubmissionCategoryChange(event.target.value as OwnerSubmissionCategory)}
-            >
-              {ownerSubmissionCategories.map((category) => (
-                <option key={category} value={category}>
-                  {ownerSubmissionCategoryLabel[category]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Item name
-            <input
-              value={newOwnerSubmissionLabel}
-              onChange={(event) => onNewOwnerSubmissionLabelChange(event.target.value)}
-              placeholder="30-day sub"
-            />
-          </label>
-          <label>
-            Price
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={newOwnerSubmissionPrice}
-              onChange={(event) => onNewOwnerSubmissionPriceChange(event.target.value)}
-              placeholder="0.00"
-            />
-          </label>
-          <button type="submit" className="btn-primary" disabled={addingOwnerSubmissionItem}>
-            {addingOwnerSubmissionItem ? 'Adding…' : 'Add item'}
-          </button>
-        </form>
-        {ownerSubmissionItemError && <p className="message message-error">{ownerSubmissionItemError}</p>}
-
-        <div className="table-wrapper">
-          <table className="submission-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Label</th>
-                <th>Price</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ownerSubmissionItems.map((item) => (
-                <tr key={item.id}>
-                  <td>{ownerSubmissionCategoryLabel[item.category]}</td>
-                  <td>{item.label}</td>
-                  <td>{formatCurrency(item.price)}</td>
-                  <td>{item.active ? 'Active' : 'Inactive'}</td>
-                  <td className="roster-actions">
-                    <button type="button" className="btn-outline" onClick={() => onToggleOwnerSubmissionItem(item)}>
-                      {item.active ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {ownerSubmissionItems.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="empty-row">
-                    No items yet — add your first one above.
                   </td>
                 </tr>
               )}

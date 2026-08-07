@@ -2,7 +2,7 @@
   min-height: 100vh;
   padding: 32px;
   padding-top: calc(var(--header-height) + 32px);
-  max-width: 1080px;
+  max-width: 1280px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -611,6 +611,11 @@ a:focus-visible {
   margin-top: 8px;
 }
 
+.modal-actions-split {
+  justify-content: space-between;
+  align-items: center;
+}
+
 /* Tables */
 
 .table-header {
@@ -705,6 +710,17 @@ a:focus-visible {
   font-size: 0.92rem;
 }
 
+.pending-contractor-list {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.pending-contractor-list li {
+  margin-bottom: 4px;
+}
+
 /* Messages */
 
 .message {
@@ -773,11 +789,22 @@ a:focus-visible {
   color: var(--ink);
 }
 
+.detail-summary-heading {
+  margin: 20px 0 10px;
+  padding-top: 16px;
+  border-top: 3px solid var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
 .detail-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 14px;
-  margin: 20px 0;
+  margin: 0 0 20px;
 }
 
 .detail-summary .label {
@@ -876,7 +903,7 @@ a:focus-visible {
 
 .owner-submission-add-row {
   display: grid;
-  grid-template-columns: 150px minmax(160px, 1fr) auto 110px auto auto;
+  grid-template-columns: 140px minmax(85px, 140px) 113px 100px 113px minmax(140px, auto) auto;
   gap: 10px;
   align-items: center;
   margin-top: 10px;

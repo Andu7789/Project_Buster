@@ -3,9 +3,13 @@ import { Modal } from './Modal'
 import { SubmissionStatusBadge } from './StatusBadge'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
 import { ownerSubmissionCategoryLabel } from '../lib/earnings'
-import type { OwnerSubmissionInvoice } from '../types'
+import type { OwnerSubmissionInvoice, PendingContractor } from '../types'
 
-type Step = 'detail' | 'preview' | 'sent'
+type Step = 'detail' | 'gate' | 'preview' | 'sent'
+
+function pendingContractorLabel(contractor: PendingContractor): string {
+  return contractor.status === 'not_submitted' ? 'not submitted yet' : 'submitted, awaiting your confirmation'
+}
 
 export function OwnerSubmissionInvoiceModal({
   clientName,
@@ -18,7 +22,7 @@ export function OwnerSubmissionInvoiceModal({
   clientInvoiceOwnerCut,
   hasClientInvoice,
   existingInvoice,
-  missingWorkerNames,
+  pendingContractors,
   onClose,
   onCreateInvoice,
   onSendInvoice,
@@ -34,7 +38,7 @@ export function OwnerSubmissionInvoiceModal({
   clientInvoiceOwnerCut: number
   hasClientInvoice: boolean
   existingInvoice: OwnerSubmissionInvoice | null
-  missingWorkerNames: string[]
+  pendingContractors: PendingContractor[]
   onClose: () => void
   onCreateInvoice: () => Promise<OwnerSubmissionInvoice>
   onSendInvoice: (invoiceId: string) => Promise<void>
@@ -98,6 +102,46 @@ export function OwnerSubmissionInvoiceModal({
     )
   }
 
+  if (step === 'gate') {
+    return (
+      <Modal title="Not all contractors are finalized" onClose={onClose}>
+        <p className="modal-subtitle">
+          {clientName} — {weekLabel}
+        </p>
+
+        <p className="info-text">
+          This invoice combines this week's owner submissions with the client invoice owner cut, but not every
+          contractor who logged work for {clientName} this week has submitted their timesheet and been confirmed as
+          checked yet:
+        </p>
+
+        <ul className="pending-contractor-list">
+          {pendingContractors.map((contractor) => (
+            <li key={contractor.name}>
+              <strong>{contractor.name}</strong> — {pendingContractorLabel(contractor)}
+            </li>
+          ))}
+        </ul>
+
+        <p className="info-text">
+          Creating the invoice now uses today's figures and won't automatically update if those contractors' entries
+          change later.
+        </p>
+
+        {error && <p className="message message-error">{error}</p>}
+
+        <div className="modal-actions">
+          <button type="button" className="btn-ghost" onClick={() => setStep('detail')} disabled={saving}>
+            Go back
+          </button>
+          <button type="button" className="btn-danger" onClick={handleCreate} disabled={saving}>
+            {saving ? 'Creating…' : 'Create invoice anyway'}
+          </button>
+        </div>
+      </Modal>
+    )
+  }
+
   if (step === 'preview' && invoice) {
     return (
       <Modal title="Owner invoice preview" onClose={onClose}>
@@ -148,20 +192,16 @@ export function OwnerSubmissionInvoiceModal({
 
       <div className="detail-summary">
         <div>
-          <p className="label">Subscriptions</p>
+          <p className="label">{ownerSubmissionCategoryLabel.subscriptions}</p>
           <strong>{formatCurrency(subscriptionsOwnerCut)}</strong>
         </div>
         <div>
-          <p className="label">Tips</p>
+          <p className="label">{ownerSubmissionCategoryLabel.tips}</p>
           <strong>{formatCurrency(tipsOwnerCut)}</strong>
         </div>
         <div>
-          <p className="label">Livestreams</p>
+          <p className="label">{ownerSubmissionCategoryLabel.livestreams}</p>
           <strong>{formatCurrency(livestreamsOwnerCut)}</strong>
-        </div>
-        <div>
-          <p className="label">Owner submissions cut</p>
-          <strong>{formatCurrency(ownerSubmissionsCut)}</strong>
         </div>
         <div>
           <p className="label">Client invoice owner cut</p>
@@ -209,11 +249,10 @@ export function OwnerSubmissionInvoiceModal({
         </p>
       )}
 
-      {!invoice && missingWorkerNames.length > 0 && (
+      {!invoice && pendingContractors.length > 0 && (
         <p className="message message-error">
-          Waiting on this week's timesheet from {missingWorkerNames.join(', ')} before this client's figures are
-          final — the invoice can't be created until every contractor who logged work for {clientName} this week has
-          submitted.
+          Not all contractors are finalized yet — {pendingContractors.length === 1 ? 'one contractor' : `${pendingContractors.length} contractors`} who
+          logged work for {clientName} this week still need to submit and be confirmed as checked.
         </p>
       )}
 
@@ -224,7 +263,12 @@ export function OwnerSubmissionInvoiceModal({
           Continue to send
         </button>
       ) : (
-        <button type="button" className="btn-primary" onClick={handleCreate} disabled={saving || missingWorkerNames.length > 0}>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => (pendingContractors.length > 0 ? setStep('gate') : handleCreate())}
+          disabled={saving}
+        >
           {saving ? 'Creating…' : 'Create invoice'}
         </button>
       )}

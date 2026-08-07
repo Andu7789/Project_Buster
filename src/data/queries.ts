@@ -8,7 +8,6 @@ import type {
   OwnerSubmission,
   OwnerSubmissionCategory,
   OwnerSubmissionInvoice,
-  OwnerSubmissionItem,
   Profile,
   ProfileStatus,
   RequestComment,
@@ -196,6 +195,56 @@ export async function addLearner(input: { fullName: string; email: string }): Pr
   return data as Profile
 }
 
+/**
+ * Adds an owner. Mirrors addWorker()/addLearner() - restores a previously
+ * removed row by email instead of failing on the unique constraint.
+ */
+export async function addOwner(input: { fullName: string; email: string }): Promise<Profile> {
+  const client = requireClient()
+  const email = input.email.trim().toLowerCase()
+
+  const { data: existing, error: lookupError } = await client
+    .from('buster_profiles')
+    .select('*')
+    .ilike('email', email)
+    .maybeSingle()
+
+  if (lookupError) throw lookupError
+
+  if (existing) {
+    if (existing.status !== 'removed') {
+      throw new Error(`${existing.full_name} (${email}) already has an account.`)
+    }
+
+    const { data, error } = await client
+      .from('buster_profiles')
+      .update({
+        full_name: input.fullName,
+        status: existing.auth_user_id ? 'active' : 'pending',
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return data as Profile
+  }
+
+  const { data, error } = await client
+    .from('buster_profiles')
+    .insert({
+      full_name: input.fullName,
+      email,
+      role: 'owner',
+      status: 'pending',
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Profile
+}
+
 export async function setProfileStatus(profileId: string, status: ProfileStatus): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_profiles').update({ status }).eq('id', profileId)
@@ -275,6 +324,19 @@ export async function submitTimesheet(input: {
 export async function markDealtWith(submissionId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_submissions').update({ dealt_with: true }).eq('id', submissionId)
+  if (error) throw error
+}
+
+/**
+ * Permanently deletes a submission and its underlying buster_sale_entries
+ * (same worker, same week) via the buster_delete_submission() RPC - see
+ * supabase/schema.sql for why this can't be a plain client-side delete under
+ * RLS. Removing the sale entries too means it also disappears from the
+ * worker's own timesheet history, not just the owner's submissions list.
+ */
+export async function deleteSubmission(submissionId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.rpc('buster_delete_submission', { target_id: submissionId })
   if (error) throw error
 }
 
@@ -518,36 +580,9 @@ export async function markClientInvoiceDealtWith(invoiceId: string): Promise<voi
   if (error) throw error
 }
 
-export async function listOwnerSubmissionItems(): Promise<OwnerSubmissionItem[]> {
+export async function deleteClientInvoice(invoiceId: string): Promise<void> {
   const client = requireClient()
-  const { data, error } = await client
-    .from('buster_owner_submission_items')
-    .select('*')
-    .order('label', { ascending: true })
-
-  if (error) throw error
-  return (data ?? []) as OwnerSubmissionItem[]
-}
-
-export async function addOwnerSubmissionItem(input: {
-  category: OwnerSubmissionCategory
-  label: string
-  price: number
-}): Promise<OwnerSubmissionItem> {
-  const client = requireClient()
-  const { data, error } = await client
-    .from('buster_owner_submission_items')
-    .insert({ category: input.category, label: input.label.trim(), price: input.price })
-    .select('*')
-    .single()
-
-  if (error) throw error
-  return data as OwnerSubmissionItem
-}
-
-export async function setOwnerSubmissionItemActive(itemId: string, active: boolean): Promise<void> {
-  const client = requireClient()
-  const { error } = await client.from('buster_owner_submission_items').update({ active }).eq('id', itemId)
+  const { error } = await client.from('buster_client_invoices').delete().eq('id', invoiceId)
   if (error) throw error
 }
 
@@ -568,12 +603,13 @@ export async function addOwnerSubmission(input: {
   category: OwnerSubmissionCategory
   clientId: string | null
   entryDate: string
-  itemId: string
+  buyerUsername: string
   gross: number
+  ownerCutPercent?: number
 }): Promise<OwnerSubmission> {
   const client = requireClient()
   const net = calcNet(input.gross)
-  const ownerCut = calcOwnerSubmissionCut(net)
+  const ownerCut = calcOwnerSubmissionCut(net, input.ownerCutPercent)
 
   const { data, error } = await client
     .from('buster_owner_submissions')
@@ -581,7 +617,7 @@ export async function addOwnerSubmission(input: {
       category: input.category,
       client_id: input.clientId,
       entry_date: input.entryDate,
-      item_id: input.itemId,
+      buyer_username: input.buyerUsername.trim(),
       gross: input.gross,
       net,
       owner_cut: ownerCut,
@@ -645,6 +681,12 @@ export async function createOwnerSubmissionInvoice(input: {
 export async function markOwnerSubmissionInvoiceDealtWith(invoiceId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_owner_submission_invoices').update({ dealt_with: true }).eq('id', invoiceId)
+  if (error) throw error
+}
+
+export async function deleteOwnerSubmissionInvoice(invoiceId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_owner_submission_invoices').delete().eq('id', invoiceId)
   if (error) throw error
 }
 

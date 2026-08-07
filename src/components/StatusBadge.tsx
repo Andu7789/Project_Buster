@@ -21,7 +21,7 @@ export function ProfileStatusBadge({ status }: { status: ProfileStatus }) {
 
 export function SubmissionStatusBadge({ dealtWith }: { dealtWith: boolean }) {
   return dealtWith ? (
-    <StatusBadge tone="success">Invoiced</StatusBadge>
+    <StatusBadge tone="success">Confirmed</StatusBadge>
   ) : (
     <StatusBadge tone="warning">Pending</StatusBadge>
   )

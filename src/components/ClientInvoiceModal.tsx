@@ -5,8 +5,6 @@ import { formatCurrency, formatWeekRange } from '../lib/dates'
 import { calcClientPayout, calcEarnings, calcOwnerCut, sectionLabel } from '../lib/earnings'
 import type { ClientInvoice, Profile, SaleEntry, SaleSection } from '../types'
 
-type Step = 'detail' | 'preview' | 'sent'
-
 const sections: SaleSection[] = ['sexting', 'customs']
 
 interface SectionTotals {
@@ -45,8 +43,8 @@ export function ClientInvoiceModal({
   workers,
   existingInvoice,
   onClose,
-  onCreateInvoice,
-  onSendInvoice,
+  onConfirm,
+  onDelete,
 }: {
   clientName: string
   weekStart: string
@@ -55,13 +53,14 @@ export function ClientInvoiceModal({
   workers: Profile[]
   existingInvoice: ClientInvoice | null
   onClose: () => void
-  onCreateInvoice: () => Promise<ClientInvoice>
-  onSendInvoice: (invoiceId: string) => Promise<void>
+  onConfirm: () => Promise<ClientInvoice>
+  onDelete: (invoiceId: string) => Promise<void>
 }) {
-  const [step, setStep] = useState<Step>(existingInvoice?.dealt_with ? 'sent' : 'detail')
   const [invoice, setInvoice] = useState<ClientInvoice | null>(existingInvoice)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const bySection = useMemo(() => totalsBySection(entries), [entries])
   const byWorker = useMemo(() => totalsByWorker(entries, workers), [entries, workers])
@@ -72,105 +71,32 @@ export function ClientInvoiceModal({
 
   const weekLabel = formatWeekRange(weekStart, weekEnd)
 
-  async function handleCreate() {
+  async function handleConfirm() {
     setSaving(true)
     setError(null)
     try {
-      const created = await onCreateInvoice()
-      setInvoice(created)
-      setStep('preview')
+      const confirmed = await onConfirm()
+      setInvoice(confirmed)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create the invoice.')
+      setError(err instanceof Error ? err.message : 'Could not confirm this invoice.')
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleSend() {
+  async function handleDelete() {
     if (!invoice) return
-    setSaving(true)
-    setError(null)
+    const confirmed = window.confirm(`Delete this invoice for ${clientName} (${weekLabel})? This can't be undone.`)
+    if (!confirmed) return
+    setDeleting(true)
+    setDeleteError(null)
     try {
-      await onSendInvoice(invoice.id)
-      setStep('sent')
+      await onDelete(invoice.id)
+      onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the invoice.')
-    } finally {
-      setSaving(false)
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete this invoice.')
+      setDeleting(false)
     }
-  }
-
-  if (step === 'sent') {
-    return (
-      <Modal title="Invoice sent" onClose={onClose}>
-        <p className="modal-subtitle">
-          {clientName} — {weekLabel}
-        </p>
-        <div className="invoice-lines">
-          <div className="invoice-line invoice-line-total">
-            <span>Client payout</span>
-            <span>{formatCurrency(invoice?.client_payout ?? clientPayout)}</span>
-          </div>
-          <div className="invoice-line">
-            <span>Owner payout</span>
-            <span>{formatCurrency(invoice?.owner_cut ?? ownerCut)}</span>
-          </div>
-        </div>
-        <p className="info-text">
-          Invoice simulated to {clientName}. Telegram delivery isn't wired up yet, but this week is now marked as
-          invoiced.
-        </p>
-        <div className="modal-actions">
-          <button type="button" className="btn-outline" onClick={() => setStep('detail')}>
-            View breakdown
-          </button>
-          <button type="button" className="btn-primary" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      </Modal>
-    )
-  }
-
-  if (step === 'preview' && invoice) {
-    return (
-      <Modal title="Invoice preview" onClose={onClose}>
-        <p className="modal-subtitle">
-          {clientName} — {weekLabel}
-        </p>
-
-        <div className="invoice-lines">
-          <div className="invoice-line">
-            <span>Worker cut</span>
-            <span>{formatCurrency(invoice.worker_cut)}</span>
-          </div>
-          <div className="invoice-line">
-            <span>Owner cut</span>
-            <span>{formatCurrency(invoice.owner_cut)}</span>
-          </div>
-          <div className="invoice-line invoice-line-total">
-            <span>Client payout</span>
-            <span>{formatCurrency(invoice.client_payout)}</span>
-          </div>
-        </div>
-
-        <p className="info-text">
-          This will be sent to {clientName} via Telegram once that's connected. For now, sending marks this week as
-          invoiced.
-        </p>
-
-        {error && <p className="message message-error">{error}</p>}
-
-        <div className="modal-actions">
-          <button type="button" className="btn-ghost" onClick={() => setStep('detail')} disabled={saving}>
-            Back
-          </button>
-          <button type="button" className="btn-primary" onClick={handleSend} disabled={saving}>
-            {saving ? 'Sending…' : 'Send invoice'}
-          </button>
-        </div>
-      </Modal>
-    )
   }
 
   return (
@@ -242,20 +168,26 @@ export function ClientInvoiceModal({
       </table>
 
       {error && <p className="message message-error">{error}</p>}
+      {deleteError && <p className="message message-error">{deleteError}</p>}
 
-      {invoice?.dealt_with ? (
-        <button type="button" className="btn-primary" onClick={() => setStep('sent')}>
-          View summary
-        </button>
-      ) : invoice ? (
-        <button type="button" className="btn-primary" onClick={() => setStep('preview')}>
-          Continue to send
-        </button>
-      ) : (
-        <button type="button" className="btn-primary" onClick={handleCreate} disabled={saving || entries.length === 0}>
-          {saving ? 'Creating…' : 'Create invoice'}
-        </button>
-      )}
+      <div className="modal-actions modal-actions-split">
+        <div>
+          {invoice && (
+            <button type="button" className="btn-danger" onClick={handleDelete} disabled={deleting || saving}>
+              {deleting ? 'Deleting…' : 'Delete invoice'}
+            </button>
+          )}
+        </div>
+        <div>
+          {invoice?.dealt_with ? (
+            <p className="message message-info">Confirmed — ready for this week's owner invoice.</p>
+          ) : (
+            <button type="button" className="btn-primary" onClick={handleConfirm} disabled={saving || deleting || entries.length === 0}>
+              {saving ? 'Confirming…' : 'Confirm & mark as checked'}
+            </button>
+          )}
+        </div>
+      </div>
     </Modal>
   )
 }

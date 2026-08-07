@@ -1,12 +1,13 @@
-export type OwnerTabId = 'team' | 'learners' | 'submissions' | 'ownerSubmissions' | 'calendar' | 'requests'
+export type OwnerTabId = 'team' | 'learners' | 'submissions' | 'ownerSubmissions' | 'calendar' | 'requests' | 'account'
 
 const tabs: { id: OwnerTabId; label: string }[] = [
-  { id: 'team', label: 'Teams, Clients & Sale Types' },
   { id: 'submissions', label: 'Submissions & Invoices' },
   { id: 'ownerSubmissions', label: 'Owner Submissions' },
+  { id: 'team', label: 'Teams, Clients & Sale Types' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'learners', label: 'Learners & Training' },
   { id: 'requests', label: 'Requests & Bugs' },
+  { id: 'account', label: 'Account' },
 ]
 
 export function TabNav({ active, onChange }: { active: OwnerTabId; onChange: (id: OwnerTabId) => void }) {

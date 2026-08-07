@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './supabase'
 import { findOrClaimProfile } from '../data/queries'
@@ -11,6 +11,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [recoveryMode, setRecoveryMode] = useState(false)
+  const sessionUserIdRef = useRef<string | null>(null)
 
   async function loadProfile(nextSession: Session | null) {
     if (!nextSession) {
@@ -36,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (cancelled) return
+      sessionUserIdRef.current = data.session?.user.id ?? null
       setSession(data.session)
       await loadProfile(data.session)
       if (!cancelled) setLoading(false)
@@ -46,6 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true)
       if (event === 'SIGNED_OUT') setRecoveryMode(false)
       setSession(nextSession)
+
+      // Supabase re-validates the session (and can re-fire this callback) whenever
+      // the tab regains visibility, even when nothing about the signed-in user
+      // changed. Only drop into the loading state for an actual sign-in/out, so
+      // the dashboard doesn't unmount and lose UI state (e.g. the active tab)
+      // just because the user switched browser tabs and came back.
+      const nextUserId = nextSession?.user.id ?? null
+      if (nextUserId === sessionUserIdRef.current) return
+      sessionUserIdRef.current = nextUserId
+
       setLoading(true)
       await loadProfile(nextSession)
       if (!cancelled) setLoading(false)

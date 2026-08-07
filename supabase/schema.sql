@@ -172,10 +172,22 @@ create table if not exists buster_owner_submissions (
 -- per-entry owner-cut % override entered at submission time - backfill
 -- existing rows from their old item's label first so history isn't lost,
 -- then drop item_id since nothing needs it once that backfill has run.
+-- The backfill is wrapped in a column-existence check (rather than a bare
+-- UPDATE) because item_id itself gets dropped at the end of this block -
+-- safe to re-run once, but a bare `os.item_id` reference would break on
+-- every re-run after that first one, once the column is actually gone.
 alter table buster_owner_submissions add column if not exists buyer_username text;
-update buster_owner_submissions os
-  set buyer_username = coalesce((select label from buster_owner_submission_items where id = os.item_id), 'Unknown')
-  where buyer_username is null;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'buster_owner_submissions' and column_name = 'item_id'
+  ) then
+    update buster_owner_submissions os
+      set buyer_username = coalesce((select label from buster_owner_submission_items where id = os.item_id), 'Unknown')
+      where buyer_username is null;
+  end if;
+end $$;
 alter table buster_owner_submissions alter column buyer_username set default '';
 alter table buster_owner_submissions alter column buyer_username set not null;
 alter table buster_owner_submissions drop column if exists item_id;

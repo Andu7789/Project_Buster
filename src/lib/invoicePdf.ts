@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import logoUrl from '../assets/invoice/ps-management-logo.jpg'
+import logoUrl from '../assets/invoice/ps-management-logo.png'
 import thankYouUrl from '../assets/invoice/ps-management-thankyou.jpg'
 import { calcOwnerCut } from './earnings'
 import type { OwnerSubmission, SaleEntry, SaleType } from '../types'
@@ -188,9 +188,9 @@ export async function generateOwnerInvoicePdf(input: {
   doc.setTextColor(...PINK)
   doc.text('INVOICE', 14, 26)
 
-  const logoHeight = 26
+  const logoHeight = 26 * 1.25
   const logoWidth = logoHeight * LOGO_ASPECT
-  doc.addImage(logoDataUrl, 'JPEG', 196 - logoWidth, 4, logoWidth, logoHeight)
+  doc.addImage(logoDataUrl, 'PNG', 196 - logoWidth, 4, logoWidth, logoHeight)
   doc.setTextColor(...INK)
 
   drawField(doc, 'Invoice Number:', `#${input.invoiceNumber}`, 14, 46, 85)
@@ -243,7 +243,7 @@ export async function generateOwnerInvoicePdf(input: {
 
   const afterTableY = lastAutoTableY(doc)
   const thankYouImgY = afterTableY + 10
-  const thankYouImgWidth = 95
+  const thankYouImgWidth = 95 * 0.75
   const thankYouImgHeight = thankYouImgWidth / THANK_YOU_ASPECT
   doc.addImage(thankYouDataUrl, 'JPEG', 14, thankYouImgY, thankYouImgWidth, thankYouImgHeight)
 

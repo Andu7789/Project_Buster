@@ -7,10 +7,12 @@ function ClientRow({
   clientRow,
   onToggleClient,
   onUpdatePayoutDetails,
+  onUpdateNextInvoiceNumber,
 }: {
   clientRow: Client
   onToggleClient: (client: Client) => void
   onUpdatePayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
+  onUpdateNextInvoiceNumber: (client: Client, value: number) => void
 }) {
   const [realNameDraft, setRealNameDraft] = useState(clientRow.real_name ?? '')
   const [syncedRealName, setSyncedRealName] = useState(clientRow.real_name)
@@ -23,6 +25,24 @@ function ClientRow({
   function saveRealName() {
     if (realNameDraft.trim() === (clientRow.real_name ?? '')) return
     onUpdatePayoutDetails(clientRow, { realName: realNameDraft, paymentMethod: clientRow.payment_method })
+  }
+
+  const [invoiceNumberDraft, setInvoiceNumberDraft] = useState(String(clientRow.next_invoice_number))
+  const [syncedInvoiceNumber, setSyncedInvoiceNumber] = useState(clientRow.next_invoice_number)
+
+  if (clientRow.next_invoice_number !== syncedInvoiceNumber) {
+    setSyncedInvoiceNumber(clientRow.next_invoice_number)
+    setInvoiceNumberDraft(String(clientRow.next_invoice_number))
+  }
+
+  function saveInvoiceNumber() {
+    const value = Number(invoiceNumberDraft)
+    if (!Number.isFinite(value) || value < 1 || Math.trunc(value) !== value) {
+      setInvoiceNumberDraft(String(clientRow.next_invoice_number))
+      return
+    }
+    if (value === clientRow.next_invoice_number) return
+    onUpdateNextInvoiceNumber(clientRow, value)
   }
 
   return (
@@ -53,6 +73,17 @@ function ClientRow({
             </option>
           ))}
         </select>
+      </td>
+      <td>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          className="gross-input"
+          value={invoiceNumberDraft}
+          onChange={(event) => setInvoiceNumberDraft(event.target.value)}
+          onBlur={saveInvoiceNumber}
+        />
       </td>
       <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
       <td className="roster-actions">
@@ -95,6 +126,7 @@ export function TeamClientsSaleTypesTab({
   onAddClient,
   onToggleClient,
   onUpdateClientPayoutDetails,
+  onUpdateClientNextInvoiceNumber,
   saleTypes,
   newSaleTypeLabel,
   addingSaleType,
@@ -133,6 +165,7 @@ export function TeamClientsSaleTypesTab({
   onAddClient: (event: FormEvent) => void
   onToggleClient: (client: Client) => void
   onUpdateClientPayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
+  onUpdateClientNextInvoiceNumber: (client: Client, value: number) => void
   saleTypes: SaleType[]
   newSaleTypeLabel: string
   addingSaleType: boolean
@@ -292,6 +325,7 @@ export function TeamClientsSaleTypesTab({
                 <th>Name</th>
                 <th>Real name</th>
                 <th>Payment method</th>
+                <th>Next invoice #</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -303,11 +337,12 @@ export function TeamClientsSaleTypesTab({
                   clientRow={clientRow}
                   onToggleClient={onToggleClient}
                   onUpdatePayoutDetails={onUpdateClientPayoutDetails}
+                  onUpdateNextInvoiceNumber={onUpdateClientNextInvoiceNumber}
                 />
               ))}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="empty-row">
+                  <td colSpan={6} className="empty-row">
                     No clients yet — add your first one above.
                   </td>
                 </tr>

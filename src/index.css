@@ -1,17 +1,17 @@
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --bg: #f2f7ff;
+  --bg: #fff5f8;
   --surface: #ffffff;
-  --surface-tint: #eef5ff;
-  --border: #dde9f9;
+  --surface-tint: #ffe5ee;
+  --border: #f6cddc;
 
   --ink: #1c2b3d;
   --ink-muted: #4f6478;
 
-  --accent: #6fa3e8;
-  --accent-strong: #3568a8;
-  --accent-ink: #0f2c45;
+  --accent: #ffe5ee;
+  --accent-strong: #e9729c;
+  --accent-ink: #b23c68;
 
   --success: #15734c;
   --success-bg: #e1f5eb;
@@ -27,7 +27,7 @@
   --header-height: 72px;
 
   --shadow-sm: 0 1px 2px rgba(15, 44, 69, 0.06);
-  --shadow-md: 0 12px 32px rgba(53, 104, 168, 0.1);
+  --shadow-md: 0 12px 32px rgba(233, 114, 156, 0.1);
 
   --z-dropdown: 10;
   --z-sticky: 20;

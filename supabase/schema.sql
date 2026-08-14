@@ -55,6 +55,12 @@ alter table buster_clients drop constraint if exists buster_clients_payment_meth
 alter table buster_clients add constraint buster_clients_payment_method_check
   check (payment_method is null or payment_method in ('bank', 'wise', 'paypal'));
 
+-- Migration: per-client invoice numbering. Holds the number to print on this
+-- client's *next* generated invoice - the owner sets each client's starting
+-- point manually (invoice numbering isn't shared across clients), and the
+-- app increments it by 1 after each PDF download.
+alter table buster_clients add column if not exists next_invoice_number integer not null default 1;
+
 -- The owner's own payout details for each method - a fixed set of 3 rows
 -- (seeded below, never inserted/deleted from the app, only updated in
 -- place). Owner-only end to end (no "anyone signed in reads" policy like

@@ -46,6 +46,7 @@ export interface Client {
   name: string
   real_name: string | null
   payment_method: PaymentMethodType | null
+  next_invoice_number: number
   active: boolean
   created_at: string
 }

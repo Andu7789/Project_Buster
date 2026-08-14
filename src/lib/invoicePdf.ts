@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatWeekRange } from './dates'
 import { calcOwnerCut } from './earnings'
 import type { OwnerSubmission, SaleEntry, SaleType } from '../types'
 
@@ -10,6 +9,33 @@ function formatUsd(usdAmount: number): string {
 
 function formatGbp(usdAmount: number, rate: number): string {
   return `£${(usdAmount * rate).toFixed(2)}`
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const PINK: [number, number, number] = [233, 114, 156]
+const PINK_LIGHT: [number, number, number] = [255, 229, 238]
+const INK: [number, number, number] = [30, 30, 30]
+const INK_MUTED: [number, number, number] = [110, 110, 110]
+
+/** Draws a label above a bold value above a pink underline - the invoice's Invoice Number/Date Issued/Bill to/Date Due fields. */
+function drawField(doc: jsPDF, label: string, value: string, x: number, y: number, width: number): void {
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...INK_MUTED)
+  doc.text(label, x, y)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text(value || '—', x, y + 7)
+  doc.setFont('helvetica', 'normal')
+
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.4)
+  doc.line(x, y + 10, x + width, y + 10)
 }
 
 function lastAutoTableY(doc: jsPDF): number {
@@ -57,7 +83,7 @@ function renderCategoryTable(doc: jsPDF, title: string, rows: CategoryEntryRow[]
     head: [['Date', 'User', 'Gross', 'Net', 'Earnings']],
     body: categoryRowsToBody(rows),
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [53, 104, 168] },
+    headStyles: { fillColor: [233, 114, 156] },
   })
   return lastAutoTableY(doc) + 10
 }
@@ -102,18 +128,19 @@ function renderDailyTable(doc: jsPDF, title: string, rows: DailyEntryRow[], star
     head: [['Date', 'User', 'Type', 'Gross', 'Net', 'Earnings']],
     body: dailyRowsToBody(rows),
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [53, 104, 168] },
+    headStyles: { fillColor: [233, 114, 156] },
   })
   return lastAutoTableY(doc) + 8
 }
 
 /**
- * Dummy bank-statement-style invoice PDF: page one is the two headline totals the owner
- * pastes onto their real invoice template; page two lists the contractor Sexting/Customs
- * entries broken down by day (an Unlocks & Tips table plus a Customs table per day), and
- * page three lists the owner's own submissions split into a Purchases table (Subscriptions
- * and Livestreams categories) and a Tips table - a placeholder until the owner supplies the
- * actual template to style.
+ * PS Management-branded invoice PDF: page one is the client-facing invoice (Invoice
+ * Number/Date Issued/Bill to/Date Due, the client's payment method, and a Service
+ * Description/Total (USD)/Total (GBP) summary table) modelled on the owner's Canva
+ * template; page two lists the contractor Sexting/Customs entries broken down by day
+ * (an Unlocks & Tips table plus a Customs table per day), and page three lists the
+ * owner's own submissions split into a Purchases table (Subscriptions and Livestreams
+ * categories) and a Tips table - internal reference pages, not shown to the client.
  */
 export function generateOwnerInvoicePdf(input: {
   clientName: string
@@ -127,42 +154,104 @@ export function generateOwnerInvoicePdf(input: {
   ownerSubmissions: OwnerSubmission[]
   exchangeRate: number
   exchangeRateDate: string
+  invoiceNumber: number
+  dateIssuedIso: string
+  dateDueIso: string
+  billToName: string
+  paymentMethodLabel: string | null
+  paymentMethodLines: string[]
 }): void {
   const { exchangeRate: rate } = input
-  const weekLabel = formatWeekRange(input.weekStart, input.weekEnd)
   const doc = new jsPDF()
 
-  // Page one - the two headline totals.
-  doc.setFontSize(18)
-  doc.text('Owner Invoice (dummy)', 14, 20)
-  doc.setFontSize(12)
-  doc.text(`${input.clientName} — ${weekLabel}`, 14, 28)
+  // Page one - the client-facing invoice.
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(30)
+  doc.setTextColor(...PINK)
+  doc.text('INVOICE', 14, 26)
+
+  doc.setFontSize(16)
+  doc.text('PS', 196, 18, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text('M A N A G E M E N T', 196, 24, { align: 'right' })
+  doc.setTextColor(...INK)
+
+  drawField(doc, 'Invoice Number:', `#${input.invoiceNumber}`, 14, 46, 85)
+  drawField(doc, 'Date Issued:', formatDate(input.dateIssuedIso), 110, 46, 86)
+  drawField(doc, 'Bill to:', input.billToName, 14, 64, 85)
+  drawField(doc, 'Date Due:', formatDate(input.dateDueIso), 110, 64, 86)
+
   doc.setFontSize(9)
-  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, 34)
+  doc.setTextColor(...INK_MUTED)
+  doc.text('Payment Method:', 14, 82)
+
+  let pmY = 89
+  if (input.paymentMethodLabel) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(...INK)
+    doc.text(input.paymentMethodLabel, 14, pmY)
+    pmY += 6
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...INK_MUTED)
+    for (const line of input.paymentMethodLines) {
+      doc.text(line, 14, pmY)
+      pmY += 5
+    }
+  } else {
+    doc.setFontSize(10)
+    doc.setTextColor(...INK_MUTED)
+    doc.text('Not set', 14, pmY)
+    pmY += 6
+  }
+
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.4)
+  doc.line(14, pmY + 2, 196, pmY + 2)
 
   autoTable(doc, {
-    startY: 40,
-    head: [['', 'USD', 'GBP']],
+    startY: pmY + 10,
+    head: [['Service Description', 'Total (USD)', 'Total (GBP)']],
     body: [
-      ['Owner submissions cut', formatUsd(input.ownerSubmissionsCut), formatGbp(input.ownerSubmissionsCut, rate)],
-      ['Client invoice owner cut', formatUsd(input.clientInvoiceOwnerCut), formatGbp(input.clientInvoiceOwnerCut, rate)],
+      ['Sexting Sales & Customs', formatUsd(input.clientInvoiceOwnerCut), formatGbp(input.clientInvoiceOwnerCut, rate)],
+      ['PPV Purchases & Tips', formatUsd(input.ownerSubmissionsCut), formatGbp(input.ownerSubmissionsCut, rate)],
     ],
-    styles: { fontSize: 11 },
-    headStyles: { fillColor: [53, 104, 168] },
+    foot: [['Total', formatUsd(input.combinedOwnerCut), formatGbp(input.combinedOwnerCut, rate)]],
+    columnStyles: { 0: { cellWidth: 100 } },
+    styles: { fontSize: 10, textColor: INK },
+    headStyles: { fillColor: PINK_LIGHT, textColor: INK, fontStyle: 'bold' },
+    footStyles: { fillColor: PINK_LIGHT, textColor: INK, fontStyle: 'bold' },
   })
 
-  const afterTotalsY = lastAutoTableY(doc)
-  doc.setFontSize(14)
-  doc.text(
-    `Combined owner cut: ${formatUsd(input.combinedOwnerCut)} / ${formatGbp(input.combinedOwnerCut, rate)}`,
-    14,
-    afterTotalsY + 12,
-  )
+  const afterTableY = lastAutoTableY(doc)
+
+  doc.setFillColor(...PINK_LIGHT)
+  doc.setDrawColor(...PINK)
+  doc.rect(110, afterTableY + 8, 86, 12, 'FD')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text(`Total Owed: ${formatGbp(input.combinedOwnerCut, rate)}`, 114, afterTableY + 16)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(20)
+  doc.setTextColor(...PINK)
+  doc.text('THANK YOU!', 14, afterTableY + 36)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...INK)
+  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, afterTableY + 44)
+  doc.setFontSize(10)
+  doc.text('Email: contact@psmanagementltd.co.uk', 14, afterTableY + 52)
+  doc.text('Telegram: @PSManagementx', 14, afterTableY + 58)
 
   // Page two - contractor entries (Sexting/Customs), grouped by day, oldest first.
   doc.addPage()
   doc.setFontSize(14)
-  doc.text(`Sexting Customs — ${input.clientName}`, 14, 20)
+  doc.text(`Sexting Sales — ${input.clientName}`, 14, 20)
   let y2 = 20
 
   if (input.saleEntries.length === 0) {

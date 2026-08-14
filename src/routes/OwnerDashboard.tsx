@@ -34,14 +34,16 @@ import {
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
+  updateClientNextInvoiceNumber,
   updateClientPayoutDetails,
   updatePaymentMethodDetails,
   updateWorkerShare,
 } from '../data/queries'
-import { formatCurrency, getCurrentWeekRange } from '../lib/dates'
+import { formatCurrency, getCurrentWeekRange, toISODate } from '../lib/dates'
 import { calcOwnerCut, clientPayoutTotal } from '../lib/earnings'
 import { fetchUsdToGbpRate, type UsdToGbpRate } from '../lib/exchangeRate'
 import { generateOwnerInvoicePdf } from '../lib/invoicePdf'
+import { paymentMethodFields, paymentMethodLabel } from '../lib/paymentMethods'
 import type {
   Client,
   ClientInvoice,
@@ -474,6 +476,15 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     setPaymentMethods((previous) => previous.map((entry) => (entry.method === method ? updated : entry)))
   }
 
+  async function handleUpdateClientNextInvoiceNumber(clientToUpdate: Client, value: number) {
+    try {
+      const updated = await updateClientNextInvoiceNumber(clientToUpdate.id, value)
+      setClients((previous) => previous.map((c) => (c.id === clientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
   async function handleAddSaleType(event: FormEvent) {
     event.preventDefault()
     setSaleTypeError(null)
@@ -820,6 +831,18 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       return
     }
 
+    const dueDate = new Date(currentWeekStart)
+    dueDate.setDate(dueDate.getDate() + 2) // weeks start Monday - invoices are due the Wednesday of the same week
+
+    const method = client.payment_method
+    const methodDetails = method ? paymentMethods.find((entry) => entry.method === method)?.details : undefined
+    const paymentMethodLines = method
+      ? paymentMethodFields[method]
+          .map((field) => ({ label: field.label, value: methodDetails?.[field.key]?.trim() ?? '' }))
+          .filter((field) => field.value !== '')
+          .map((field) => `${field.label}: ${field.value}`)
+      : []
+
     generateOwnerInvoicePdf({
       clientName: client.real_name?.trim() || client.name,
       weekStart: currentWeekStart,
@@ -832,7 +855,15 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       ownerSubmissions: clientOwnerSubmissions,
       exchangeRate: exchangeRate.rate,
       exchangeRateDate: exchangeRate.date,
+      invoiceNumber: client.next_invoice_number,
+      dateIssuedIso: toISODate(new Date()),
+      dateDueIso: toISODate(dueDate),
+      billToName: client.real_name?.trim() || client.name,
+      paymentMethodLabel: method ? paymentMethodLabel[method] : null,
+      paymentMethodLines,
     })
+
+    handleUpdateClientNextInvoiceNumber(client, client.next_invoice_number + 1)
   }
 
   return (
@@ -905,6 +936,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onAddClient={handleAddClient}
               onToggleClient={handleToggleClient}
               onUpdateClientPayoutDetails={handleUpdateClientPayoutDetails}
+              onUpdateClientNextInvoiceNumber={handleUpdateClientNextInvoiceNumber}
               saleTypes={saleTypes}
               newSaleTypeLabel={newSaleTypeLabel}
               addingSaleType={addingSaleType}

@@ -378,6 +378,19 @@ export async function updateClientPayoutDetails(
   return data as Client
 }
 
+export async function updateClientNextInvoiceNumber(clientId: string, nextInvoiceNumber: number): Promise<Client> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_clients')
+    .update({ next_invoice_number: nextInvoiceNumber })
+    .eq('id', clientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Client
+}
+
 export async function listPaymentMethods(): Promise<PaymentMethod[]> {
   const client = requireClient()
   const { data, error } = await client.from('buster_payment_methods').select('*').order('method', { ascending: true })

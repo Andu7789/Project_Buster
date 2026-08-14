@@ -20,6 +20,49 @@ const PINK_LIGHT: [number, number, number] = [255, 229, 238]
 const INK: [number, number, number] = [30, 30, 30]
 const INK_MUTED: [number, number, number] = [110, 110, 110]
 
+/** Draws a small 4-point sparkle (two overlapping diamonds) - the accent next to the PS Management wordmark. */
+function drawSparkle(doc: jsPDF, cx: number, cy: number, size: number): void {
+  doc.setFillColor(...PINK)
+  const long = size
+  const short = size * 0.32
+  // Vertical diamond.
+  doc.triangle(cx, cy - long, cx + short, cy, cx, cy + long, 'F')
+  doc.triangle(cx, cy - long, cx - short, cy, cx, cy + long, 'F')
+  // Horizontal diamond.
+  const long2 = size * 0.55
+  const short2 = size * 0.18
+  doc.triangle(cx - long2, cy, cx, cy - short2, cx + long2, cy, 'F')
+  doc.triangle(cx - long2, cy, cx, cy + short2, cx + long2, cy, 'F')
+}
+
+/** Draws a filled pink circle with a white envelope glyph inside it. */
+function drawEmailIcon(doc: jsPDF, cx: number, cy: number, r: number): void {
+  doc.setFillColor(...PINK)
+  doc.circle(cx, cy, r, 'F')
+
+  const w = r * 1.3
+  const h = r * 0.9
+  const left = cx - w / 2
+  const top = cy - h / 2
+  doc.setFillColor(255, 255, 255)
+  doc.rect(left, top, w, h, 'F')
+
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.35)
+  doc.line(left, top, cx, top + h * 0.55)
+  doc.line(cx, top + h * 0.55, left + w, top)
+}
+
+/** Draws a filled pink circle with a white paper-plane glyph inside it. */
+function drawTelegramIcon(doc: jsPDF, cx: number, cy: number, r: number): void {
+  doc.setFillColor(...PINK)
+  doc.circle(cx, cy, r, 'F')
+
+  doc.setFillColor(255, 255, 255)
+  doc.triangle(cx - r * 0.6, cy + r * 0.35, cx + r * 0.65, cy - r * 0.05, cx - r * 0.05, cy + r * 0.05, 'F')
+  doc.triangle(cx - r * 0.05, cy + r * 0.05, cx + r * 0.65, cy - r * 0.05, cx - r * 0.25, cy + r * 0.55, 'F')
+}
+
 /** Draws a label above a bold value above a pink underline - the invoice's Invoice Number/Date Issued/Bill to/Date Due fields. */
 function drawField(doc: jsPDF, label: string, value: string, x: number, y: number, width: number): void {
   doc.setFont('helvetica', 'normal')
@@ -170,11 +213,13 @@ export function generateOwnerInvoicePdf(input: {
   doc.setTextColor(...PINK)
   doc.text('INVOICE', 14, 26)
 
-  doc.setFontSize(16)
-  doc.text('PS', 196, 18, { align: 'right' })
+  doc.setFont('times', 'bold')
+  doc.setFontSize(26)
+  doc.text('PS', 196, 20, { align: 'right' })
+  drawSparkle(doc, 198, 9, 2.4)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  doc.text('M A N A G E M E N T', 196, 24, { align: 'right' })
+  doc.text('M A N A G E M E N T', 196, 26, { align: 'right' })
   doc.setTextColor(...INK)
 
   drawField(doc, 'Invoice Number:', `#${input.invoiceNumber}`, 14, 46, 85)
@@ -244,9 +289,15 @@ export function generateOwnerInvoicePdf(input: {
   doc.setFontSize(9)
   doc.setTextColor(...INK)
   doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, afterTableY + 44)
+
   doc.setFontSize(10)
-  doc.text('Email: contact@psmanagementltd.co.uk', 14, afterTableY + 52)
-  doc.text('Telegram: @PSManagementx', 14, afterTableY + 58)
+  const contactIconRadius = 3.2
+  const contactY1 = afterTableY + 55
+  const contactY2 = afterTableY + 64
+  drawEmailIcon(doc, 14 + contactIconRadius, contactY1 - 1.3, contactIconRadius)
+  doc.text('contact@psmanagementltd.co.uk', 14 + contactIconRadius * 2 + 4, contactY1)
+  drawTelegramIcon(doc, 14 + contactIconRadius, contactY2 - 1.3, contactIconRadius)
+  doc.text('Telegram: @PSManagementx', 14 + contactIconRadius * 2 + 4, contactY2)
 
   // Page two - contractor entries (Sexting/Customs), grouped by day, oldest first.
   doc.addPage()

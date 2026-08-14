@@ -271,29 +271,36 @@ export function generateOwnerInvoicePdf(input: {
   })
 
   const afterTableY = lastAutoTableY(doc)
-
-  doc.setFillColor(...PINK_LIGHT)
-  doc.setDrawColor(...PINK)
-  doc.rect(110, afterTableY + 8, 86, 12, 'FD')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...INK)
-  doc.text(`Total Owed: ${formatGbp(input.combinedOwnerCut, rate)}`, 114, afterTableY + 16)
+  const thankYouY = afterTableY + 20
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(20)
   doc.setTextColor(...PINK)
-  doc.text('THANK YOU!', 14, afterTableY + 36)
+  doc.text('THANK YOU!', 14, thankYouY)
+
+  doc.setFillColor(...PINK_LIGHT)
+  doc.setDrawColor(...PINK)
+  doc.rect(110, thankYouY - 9, 86, 12, 'FD')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text(`Total Owed: ${formatGbp(input.combinedOwnerCut, rate)}`, 114, thankYouY - 1)
+
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.35)
+  doc.line(110, thankYouY + 10, 196, thankYouY + 10)
+  doc.line(110, thankYouY + 16, 196, thankYouY + 16)
+  doc.line(110, thankYouY + 22, 196, thankYouY + 22)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...INK)
-  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, afterTableY + 44)
+  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, thankYouY + 8)
 
   doc.setFontSize(10)
   const contactIconRadius = 3.2
-  const contactY1 = afterTableY + 55
-  const contactY2 = afterTableY + 64
+  const contactY1 = thankYouY + 19
+  const contactY2 = thankYouY + 28
   drawEmailIcon(doc, 14 + contactIconRadius, contactY1 - 1.3, contactIconRadius)
   doc.text('contact@psmanagementltd.co.uk', 14 + contactIconRadius * 2 + 4, contactY1)
   drawTelegramIcon(doc, 14 + contactIconRadius, contactY2 - 1.3, contactIconRadius)

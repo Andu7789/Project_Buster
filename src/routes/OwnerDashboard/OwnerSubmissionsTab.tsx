@@ -144,7 +144,13 @@ function OwnerSubmissionCategoryTable({
         </table>
       </div>
 
-      <div className="owner-submission-add-row">
+      <form
+        className="owner-submission-add-row"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleAdd()
+        }}
+      >
         <input type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} />
         <input
           type="text"
@@ -189,10 +195,10 @@ function OwnerSubmissionCategoryTable({
             ? `Net ${formatCurrency(previewNet)} · Owner cut ${formatCurrency(previewOwnerCut)}`
             : ''}
         </span>
-        <button type="button" className="btn-outline" onClick={handleAdd} disabled={saving}>
+        <button type="submit" className="btn-outline" disabled={saving}>
           {saving ? 'Adding…' : 'Add'}
         </button>
-      </div>
+      </form>
       {error && <p className="message message-error">{error}</p>}
     </div>
   )

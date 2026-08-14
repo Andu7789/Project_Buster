@@ -39,11 +39,23 @@ export interface PendingContractor {
   status: 'not_submitted' | 'awaiting_confirmation'
 }
 
+export type PaymentMethodType = 'bank' | 'wise' | 'paypal'
+
 export interface Client {
   id: string
   name: string
+  real_name: string | null
+  payment_method: PaymentMethodType | null
   active: boolean
   created_at: string
+}
+
+/** The owner's own payout details for a method (bank/WISE/PayPal) - a fixed set of 3 rows, owner-only. */
+export interface PaymentMethod {
+  id: string
+  method: PaymentMethodType
+  details: Record<string, string>
+  updated_at: string
 }
 
 export interface SaleType {

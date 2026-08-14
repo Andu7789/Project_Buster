@@ -22,6 +22,7 @@ import {
   listOwners,
   listOwnerSubmissionInvoices,
   listOwnerSubmissionsForRange,
+  listPaymentMethods,
   listSaleEntriesForRange,
   listSaleEntriesForWeek,
   listSaleEntriesForWorker,
@@ -33,6 +34,8 @@ import {
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
+  updateClientPayoutDetails,
+  updatePaymentMethodDetails,
   updateWorkerShare,
 } from '../data/queries'
 import { formatCurrency, getCurrentWeekRange } from '../lib/dates'
@@ -45,6 +48,8 @@ import type {
   OwnerSubmission,
   OwnerSubmissionCategory,
   OwnerSubmissionInvoice,
+  PaymentMethod,
+  PaymentMethodType,
   PendingContractor,
   Profile,
   ProfileStatus,
@@ -84,6 +89,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [ownerSubmissions, setOwnerSubmissions] = useState<OwnerSubmission[]>([])
   const [ownerSubmissionInvoices, setOwnerSubmissionInvoices] = useState<OwnerSubmissionInvoice[]>([])
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<OwnerTabId>('submissions')
@@ -155,6 +161,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       listOwnerSubmissionsForRange(currentWeekStart, currentWeekEnd),
       listOwnerSubmissionInvoices(),
       listOwners(),
+      listPaymentMethods(),
     ])
       .then(
         ([
@@ -169,6 +176,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           ownerSubmissionData,
           ownerSubmissionInvoiceData,
           ownerData,
+          paymentMethodData,
         ]) => {
           if (cancelled) return
           setWorkers(workerData)
@@ -182,6 +190,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setOwnerSubmissions(ownerSubmissionData)
           setOwnerSubmissionInvoices(ownerSubmissionInvoiceData)
           setOwners(ownerData)
+          setPaymentMethods(paymentMethodData)
           setSelectedWorkerId((current) => current ?? workerData[0]?.id ?? null)
         },
       )
@@ -446,6 +455,23 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     } catch (err) {
       setClientError(err instanceof Error ? err.message : 'Could not update this client.')
     }
+  }
+
+  async function handleUpdateClientPayoutDetails(
+    clientToUpdate: Client,
+    input: { realName: string; paymentMethod: PaymentMethodType | null },
+  ) {
+    try {
+      const updated = await updateClientPayoutDetails(clientToUpdate.id, input)
+      setClients((previous) => previous.map((c) => (c.id === clientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
+  async function handleSavePaymentMethod(method: PaymentMethodType, details: Record<string, string>) {
+    const updated = await updatePaymentMethodDetails(method, details)
+    setPaymentMethods((previous) => previous.map((entry) => (entry.method === method ? updated : entry)))
   }
 
   async function handleAddSaleType(event: FormEvent) {
@@ -795,7 +821,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     }
 
     generateOwnerInvoicePdf({
-      clientName: client.name,
+      clientName: client.real_name?.trim() || client.name,
       weekStart: currentWeekStart,
       weekEnd: currentWeekEnd,
       ownerSubmissionsCut,
@@ -878,6 +904,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onNewClientNameChange={setNewClientName}
               onAddClient={handleAddClient}
               onToggleClient={handleToggleClient}
+              onUpdateClientPayoutDetails={handleUpdateClientPayoutDetails}
               saleTypes={saleTypes}
               newSaleTypeLabel={newSaleTypeLabel}
               addingSaleType={addingSaleType}
@@ -892,6 +919,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
             <AccountTab
               currentProfileId={profile.id}
               owners={owners}
+              paymentMethods={paymentMethods}
+              onSavePaymentMethod={handleSavePaymentMethod}
               newOwnerName={newOwnerName}
               newOwnerEmail={newOwnerEmail}
               addingOwner={addingOwner}

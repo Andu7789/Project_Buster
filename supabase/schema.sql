@@ -46,6 +46,30 @@ create table if not exists buster_clients (
   created_at timestamptz not null default now()
 );
 
+-- Migration: real_name (the client's actual/legal name, used on the owner
+-- invoice instead of the nickname in `name`) and payment_method (which of
+-- the owner's buster_payment_methods rows below this client pays into).
+alter table buster_clients add column if not exists real_name text;
+alter table buster_clients add column if not exists payment_method text;
+alter table buster_clients drop constraint if exists buster_clients_payment_method_check;
+alter table buster_clients add constraint buster_clients_payment_method_check
+  check (payment_method is null or payment_method in ('bank', 'wise', 'paypal'));
+
+-- The owner's own payout details for each method - a fixed set of 3 rows
+-- (seeded below, never inserted/deleted from the app, only updated in
+-- place). Owner-only end to end (no "anyone signed in reads" policy like
+-- buster_clients/buster_sale_types below) since this is banking/PayPal info,
+-- not something every signed-in worker needs to read.
+create table if not exists buster_payment_methods (
+  id uuid primary key default gen_random_uuid(),
+  method text not null unique check (method in ('bank', 'wise', 'paypal')),
+  details jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+insert into buster_payment_methods (method) values ('bank'), ('wise'), ('paypal')
+on conflict (method) do nothing;
+
 create table if not exists buster_sale_types (
   id uuid primary key default gen_random_uuid(),
   label text not null unique,
@@ -364,6 +388,7 @@ alter table buster_request_comments enable row level security;
 alter table buster_owner_submission_items enable row level security;
 alter table buster_owner_submissions enable row level security;
 alter table buster_owner_submission_invoices enable row level security;
+alter table buster_payment_methods enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -429,6 +454,14 @@ create policy "anyone signed in reads" on buster_sale_types for select
 
 drop policy if exists "owner manages" on buster_sale_types;
 create policy "owner manages" on buster_sale_types for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+-- buster_payment_methods policies - owner-only, no "anyone signed in reads"
+-- policy (unlike buster_clients/buster_sale_types above) since this is
+-- banking/PayPal info, not something every signed-in worker needs to read.
+drop policy if exists "owner manages" on buster_payment_methods;
+create policy "owner manages" on buster_payment_methods for all
   using (buster_is_owner())
   with check (buster_is_owner());
 

@@ -1,6 +1,68 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { ProfileStatusBadge } from '../../components/StatusBadge'
-import type { Client, Profile, ProfileStatus, SaleType } from '../../types'
+import { paymentMethodLabel, paymentMethods as paymentMethodOptions } from '../../lib/paymentMethods'
+import type { Client, PaymentMethodType, Profile, ProfileStatus, SaleType } from '../../types'
+
+function ClientRow({
+  clientRow,
+  onToggleClient,
+  onUpdatePayoutDetails,
+}: {
+  clientRow: Client
+  onToggleClient: (client: Client) => void
+  onUpdatePayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
+}) {
+  const [realNameDraft, setRealNameDraft] = useState(clientRow.real_name ?? '')
+  const [syncedRealName, setSyncedRealName] = useState(clientRow.real_name)
+
+  if (clientRow.real_name !== syncedRealName) {
+    setSyncedRealName(clientRow.real_name)
+    setRealNameDraft(clientRow.real_name ?? '')
+  }
+
+  function saveRealName() {
+    if (realNameDraft.trim() === (clientRow.real_name ?? '')) return
+    onUpdatePayoutDetails(clientRow, { realName: realNameDraft, paymentMethod: clientRow.payment_method })
+  }
+
+  return (
+    <tr>
+      <td>{clientRow.name}</td>
+      <td>
+        <input
+          value={realNameDraft}
+          placeholder="Real name"
+          onChange={(event) => setRealNameDraft(event.target.value)}
+          onBlur={saveRealName}
+        />
+      </td>
+      <td>
+        <select
+          value={clientRow.payment_method ?? ''}
+          onChange={(event) =>
+            onUpdatePayoutDetails(clientRow, {
+              realName: realNameDraft,
+              paymentMethod: (event.target.value || null) as PaymentMethodType | null,
+            })
+          }
+        >
+          <option value="">Not set</option>
+          {paymentMethodOptions.map((method) => (
+            <option key={method} value={method}>
+              {paymentMethodLabel[method]}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
+      <td className="roster-actions">
+        <button type="button" className="btn-outline" onClick={() => onToggleClient(clientRow)}>
+          {clientRow.active ? 'Deactivate' : 'Activate'}
+        </button>
+      </td>
+    </tr>
+  )
+}
 
 export function TeamClientsSaleTypesTab({
   workers,
@@ -32,6 +94,7 @@ export function TeamClientsSaleTypesTab({
   onNewClientNameChange,
   onAddClient,
   onToggleClient,
+  onUpdateClientPayoutDetails,
   saleTypes,
   newSaleTypeLabel,
   addingSaleType,
@@ -69,6 +132,7 @@ export function TeamClientsSaleTypesTab({
   onNewClientNameChange: (value: string) => void
   onAddClient: (event: FormEvent) => void
   onToggleClient: (client: Client) => void
+  onUpdateClientPayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
   saleTypes: SaleType[]
   newSaleTypeLabel: string
   addingSaleType: boolean
@@ -226,25 +290,24 @@ export function TeamClientsSaleTypesTab({
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Real name</th>
+                <th>Payment method</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {clients.map((clientRow) => (
-                <tr key={clientRow.id}>
-                  <td>{clientRow.name}</td>
-                  <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
-                  <td className="roster-actions">
-                    <button type="button" className="btn-outline" onClick={() => onToggleClient(clientRow)}>
-                      {clientRow.active ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </td>
-                </tr>
+                <ClientRow
+                  key={clientRow.id}
+                  clientRow={clientRow}
+                  onToggleClient={onToggleClient}
+                  onUpdatePayoutDetails={onUpdateClientPayoutDetails}
+                />
               ))}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="empty-row">
+                  <td colSpan={5} className="empty-row">
                     No clients yet — add your first one above.
                   </td>
                 </tr>

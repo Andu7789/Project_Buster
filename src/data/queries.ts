@@ -8,6 +8,8 @@ import type {
   OwnerSubmission,
   OwnerSubmissionCategory,
   OwnerSubmissionInvoice,
+  PaymentMethod,
+  PaymentMethodType,
   Profile,
   ProfileStatus,
   RequestComment,
@@ -358,6 +360,42 @@ export async function setClientActive(clientId: string, active: boolean): Promis
   const client = requireClient()
   const { error } = await client.from('buster_clients').update({ active }).eq('id', clientId)
   if (error) throw error
+}
+
+export async function updateClientPayoutDetails(
+  clientId: string,
+  input: { realName: string; paymentMethod: PaymentMethodType | null },
+): Promise<Client> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_clients')
+    .update({ real_name: input.realName.trim() || null, payment_method: input.paymentMethod })
+    .eq('id', clientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Client
+}
+
+export async function listPaymentMethods(): Promise<PaymentMethod[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_payment_methods').select('*').order('method', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as PaymentMethod[]
+}
+
+export async function updatePaymentMethodDetails(method: PaymentMethodType, details: Record<string, string>): Promise<PaymentMethod> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_payment_methods')
+    .update({ details, updated_at: new Date().toISOString() })
+    .eq('method', method)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as PaymentMethod
 }
 
 export async function listSaleTypes(): Promise<SaleType[]> {

@@ -1072,6 +1072,29 @@ a:focus-visible {
   .calendar-entry-row .entry-preview {
     flex: 1 1 100%;
   }
+
+  .owner-submission-add-row {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .owner-submission-add-row input,
+  .owner-submission-add-row .owner-submission-override {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .owner-submission-add-row .gross-input {
+    flex: 0 1 90px;
+  }
+
+  .owner-submission-add-row .entry-preview {
+    flex: 1 1 100%;
+  }
+
+  .owner-submission-add-row button {
+    flex: 1 1 100%;
+  }
 }
 
 .calendar-weekday-row {

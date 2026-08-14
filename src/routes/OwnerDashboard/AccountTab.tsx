@@ -1,10 +1,79 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { ProfileStatusBadge } from '../../components/StatusBadge'
-import type { Profile, ProfileStatus } from '../../types'
+import { paymentMethodFields, paymentMethodLabel, paymentMethods as paymentMethodOptions } from '../../lib/paymentMethods'
+import type { PaymentMethod, PaymentMethodType, Profile, ProfileStatus } from '../../types'
+
+function PaymentMethodCard({
+  method,
+  paymentMethod,
+  onSave,
+}: {
+  method: PaymentMethodType
+  paymentMethod: PaymentMethod | undefined
+  onSave: (method: PaymentMethodType, details: Record<string, string>) => Promise<void>
+}) {
+  const fields = paymentMethodFields[method]
+
+  function draftFromSource(): Record<string, string> {
+    const next: Record<string, string> = {}
+    for (const field of fields) next[field.key] = paymentMethod?.details[field.key] ?? ''
+    return next
+  }
+
+  const [draft, setDraft] = useState<Record<string, string>>(draftFromSource)
+  const [syncedPaymentMethod, setSyncedPaymentMethod] = useState(paymentMethod)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  if (paymentMethod !== syncedPaymentMethod) {
+    setSyncedPaymentMethod(paymentMethod)
+    setDraft(draftFromSource())
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setSaved(false)
+    setSaving(true)
+    try {
+      await onSave(method, draft)
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save these details.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="entry-section">
+      <h4>{paymentMethodLabel[method]}</h4>
+      <form className="add-worker-form" onSubmit={handleSubmit}>
+        {fields.map((field) => (
+          <label key={field.key}>
+            {field.label}
+            <input
+              value={draft[field.key] ?? ''}
+              onChange={(event) => setDraft((previous) => ({ ...previous, [field.key]: event.target.value }))}
+            />
+          </label>
+        ))}
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </form>
+      {error && <p className="message message-error">{error}</p>}
+      {saved && !error && <p className="message message-info">Saved.</p>}
+    </div>
+  )
+}
 
 export function AccountTab({
   currentProfileId,
   owners,
+  paymentMethods,
+  onSavePaymentMethod,
   newOwnerName,
   newOwnerEmail,
   addingOwner,
@@ -28,6 +97,8 @@ export function AccountTab({
 }: {
   currentProfileId: string
   owners: Profile[]
+  paymentMethods: PaymentMethod[]
+  onSavePaymentMethod: (method: PaymentMethodType, details: Record<string, string>) => Promise<void>
   newOwnerName: string
   newOwnerEmail: string
   addingOwner: boolean
@@ -141,6 +212,24 @@ export function AccountTab({
           </table>
         </div>
         {ownerRosterError && <p className="message message-error">{ownerRosterError}</p>}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Payout details</h2>
+            <p>Where clients pay you. Select a client's payment method under Teams, Clients & Sale Types.</p>
+          </div>
+        </div>
+
+        {paymentMethodOptions.map((method) => (
+          <PaymentMethodCard
+            key={method}
+            method={method}
+            paymentMethod={paymentMethods.find((entry) => entry.method === method)}
+            onSave={onSavePaymentMethod}
+          />
+        ))}
       </section>
 
       <section className="panel">

@@ -138,7 +138,7 @@ export function SubmissionsInvoicesTab({
                   onClick={() => onSelectClient(client.id)}
                 >
                   <strong>{client.name}</strong>
-                  <p>Client payout: {formatCurrency(clientPayoutTotal(entries))}</p>
+                  <p>Client payout: {formatCurrency(clientPayoutTotal(entries, client))}</p>
                   <p className={!invoice ? 'info-text' : invoice.dealt_with ? undefined : 'text-danger'}>
                     {!invoice ? 'No invoice yet' : invoice.dealt_with ? 'Confirmed' : 'Not yet checked'}
                   </p>

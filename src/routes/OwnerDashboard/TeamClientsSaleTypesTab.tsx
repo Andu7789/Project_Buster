@@ -95,6 +95,92 @@ function ClientRow({
   )
 }
 
+function PercentField({ value, onSave }: { value: number; onSave: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+  const [synced, setSynced] = useState(value)
+
+  if (value !== synced) {
+    setSynced(value)
+    setDraft(String(value))
+  }
+
+  function save() {
+    const parsed = Number(draft)
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+      setDraft(String(value))
+      return
+    }
+    if (parsed === value) return
+    onSave(parsed)
+  }
+
+  return (
+    <input
+      type="number"
+      min="0"
+      max="100"
+      step="0.1"
+      className="gross-input"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={save}
+    />
+  )
+}
+
+function ClientOwnerPercentRow({
+  clientRow,
+  onUpdateOwnerPercents,
+}: {
+  clientRow: Client
+  onUpdateOwnerPercents: (
+    client: Client,
+    input: { pmSalesOwnerPercent: number; sextingOwnerPercent: number; customsOwnerPercent: number },
+  ) => void
+}) {
+  return (
+    <tr>
+      <td>{clientRow.name}</td>
+      <td>
+        <PercentField
+          value={clientRow.pm_sales_owner_percent}
+          onSave={(value) =>
+            onUpdateOwnerPercents(clientRow, {
+              pmSalesOwnerPercent: value,
+              sextingOwnerPercent: clientRow.sexting_owner_percent,
+              customsOwnerPercent: clientRow.customs_owner_percent,
+            })
+          }
+        />
+      </td>
+      <td>
+        <PercentField
+          value={clientRow.sexting_owner_percent}
+          onSave={(value) =>
+            onUpdateOwnerPercents(clientRow, {
+              pmSalesOwnerPercent: clientRow.pm_sales_owner_percent,
+              sextingOwnerPercent: value,
+              customsOwnerPercent: clientRow.customs_owner_percent,
+            })
+          }
+        />
+      </td>
+      <td>
+        <PercentField
+          value={clientRow.customs_owner_percent}
+          onSave={(value) =>
+            onUpdateOwnerPercents(clientRow, {
+              pmSalesOwnerPercent: clientRow.pm_sales_owner_percent,
+              sextingOwnerPercent: clientRow.sexting_owner_percent,
+              customsOwnerPercent: value,
+            })
+          }
+        />
+      </td>
+    </tr>
+  )
+}
+
 export function TeamClientsSaleTypesTab({
   workers,
   editingShareId,
@@ -127,6 +213,7 @@ export function TeamClientsSaleTypesTab({
   onToggleClient,
   onUpdateClientPayoutDetails,
   onUpdateClientNextInvoiceNumber,
+  onUpdateClientOwnerPercents,
   saleTypes,
   newSaleTypeLabel,
   addingSaleType,
@@ -166,6 +253,10 @@ export function TeamClientsSaleTypesTab({
   onToggleClient: (client: Client) => void
   onUpdateClientPayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
   onUpdateClientNextInvoiceNumber: (client: Client, value: number) => void
+  onUpdateClientOwnerPercents: (
+    client: Client,
+    input: { pmSalesOwnerPercent: number; sextingOwnerPercent: number; customsOwnerPercent: number },
+  ) => void
   saleTypes: SaleType[]
   newSaleTypeLabel: string
   addingSaleType: boolean
@@ -343,6 +434,35 @@ export function TeamClientsSaleTypesTab({
               {clients.length === 0 && (
                 <tr>
                   <td colSpan={6} className="empty-row">
+                    No clients yet — add your first one above.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="table-header">
+          <h3>Owner cut %</h3>
+          <p>How much of each client's earnings the owner keeps, by transaction type.</p>
+        </div>
+        <div className="table-wrapper">
+          <table className="submission-table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>PM Sales %</th>
+                <th>Sexting %</th>
+                <th>Customs %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map((clientRow) => (
+                <ClientOwnerPercentRow key={clientRow.id} clientRow={clientRow} onUpdateOwnerPercents={onUpdateClientOwnerPercents} />
+              ))}
+              {clients.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="empty-row">
                     No clients yet — add your first one above.
                   </td>
                 </tr>

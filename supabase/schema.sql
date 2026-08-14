@@ -61,6 +61,15 @@ alter table buster_clients add constraint buster_clients_payment_method_check
 -- app increments it by 1 after each PDF download.
 alter table buster_clients add column if not exists next_invoice_number integer not null default 1;
 
+-- Migration: per-client owner-cut percentages, replacing the app's old
+-- global rates (40% PM Sales / 20% Sexting / 15% Customs) with an explicit,
+-- editable percent per client per transaction type. Defaults match the old
+-- global rates so existing clients keep their current numbers until the
+-- owner deliberately customizes one.
+alter table buster_clients add column if not exists pm_sales_owner_percent numeric not null default 40;
+alter table buster_clients add column if not exists sexting_owner_percent numeric not null default 20;
+alter table buster_clients add column if not exists customs_owner_percent numeric not null default 15;
+
 -- The owner's own payout details for each method - a fixed set of 3 rows
 -- (seeded below, never inserted/deleted from the app, only updated in
 -- place). Owner-only end to end (no "anyone signed in reads" policy like

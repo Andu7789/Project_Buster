@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { formatCurrency, formatWeekRange, toISODate } from '../../lib/dates'
-import { OWNER_SUBMISSION_OWNER_RATE, calcNet, calcOwnerSubmissionCut, ownerSubmissionCategoryLabel } from '../../lib/earnings'
+import { calcNet, calcOwnerSubmissionCut, ownerSubmissionCategoryLabel } from '../../lib/earnings'
 import { SubmissionStatusBadge } from '../../components/StatusBadge'
 import type { Client, ClientInvoice, OwnerSubmission, OwnerSubmissionCategory, OwnerSubmissionInvoice, PendingContractor } from '../../types'
 
@@ -11,7 +11,6 @@ function pendingContractorLabel(contractor: PendingContractor): string {
 }
 
 const categories: OwnerSubmissionCategory[] = ['subscriptions', 'tips', 'livestreams']
-const defaultPercentDraft = String(OWNER_SUBMISSION_OWNER_RATE * 100)
 
 function OwnerSubmissionCategoryTable({
   category,
@@ -29,10 +28,12 @@ function OwnerSubmissionCategoryTable({
     entryDate: string
     buyerUsername: string
     gross: number
+    defaultOwnerCutPercent: number
     ownerCutPercent?: number
   }) => Promise<void>
   onDelete: (entryId: string) => Promise<void>
 }) {
+  const defaultPercentDraft = String(client.pm_sales_owner_percent)
   const [entryDate, setEntryDate] = useState(() => toISODate(new Date()))
   const [buyerUsername, setBuyerUsername] = useState('')
   const [grossDraft, setGrossDraft] = useState('')
@@ -47,7 +48,9 @@ function OwnerSubmissionCategoryTable({
   const hasValidPercent = !overridePercent || (percentDraft.trim() !== '' && Number.isFinite(percentValue) && percentValue >= 0)
   const previewNet = hasValidGross ? calcNet(grossValue) : null
   const previewOwnerCut =
-    previewNet !== null && hasValidPercent ? calcOwnerSubmissionCut(previewNet, overridePercent ? percentValue : undefined) : null
+    previewNet !== null && hasValidPercent
+      ? calcOwnerSubmissionCut(previewNet, client.pm_sales_owner_percent, overridePercent ? percentValue : undefined)
+      : null
 
   const subtotal = entries.reduce((sum, entry) => sum + entry.owner_cut, 0)
 
@@ -74,6 +77,7 @@ function OwnerSubmissionCategoryTable({
         entryDate,
         buyerUsername,
         gross: grossValue,
+        defaultOwnerCutPercent: client.pm_sales_owner_percent,
         ownerCutPercent: overridePercent ? percentValue : undefined,
       })
       setBuyerUsername('')
@@ -229,6 +233,7 @@ export function OwnerSubmissionsTab({
     entryDate: string
     buyerUsername: string
     gross: number
+    defaultOwnerCutPercent: number
     ownerCutPercent?: number
   }) => Promise<void>
   onDeleteOwnerSubmission: (entryId: string) => Promise<void>
@@ -240,7 +245,7 @@ export function OwnerSubmissionsTab({
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h2>Owner Submissions</h2>
+          <h2>PM Sales</h2>
           <p>{formatWeekRange(currentWeekStart, currentWeekEnd)} — log this week's Purchases, Tips and Customs per client.</p>
         </div>
       </div>

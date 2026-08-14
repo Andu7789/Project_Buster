@@ -114,15 +114,16 @@ interface DailyEntryRow {
   earnings: number
 }
 
-function toDailyRow(entry: SaleEntry, saleTypes: SaleType[]): DailyEntryRow {
+function toDailyRow(entry: SaleEntry, saleTypes: SaleType[], sextingOwnerPercent: number, customsOwnerPercent: number): DailyEntryRow {
   const saleType = saleTypes.find((type) => type.id === entry.sale_type_id)
+  const ownerCutPercent = entry.section === 'sexting' ? sextingOwnerPercent : customsOwnerPercent
   return {
     date: entry.entry_date,
     user: entry.buyer_username,
     type: saleType?.label ?? 'Unknown type',
     gross: entry.gross,
     net: entry.net,
-    earnings: calcOwnerCut(entry.net, entry.section),
+    earnings: calcOwnerCut(entry.net, ownerCutPercent),
   }
 }
 
@@ -168,6 +169,8 @@ export async function generateOwnerInvoicePdf(input: {
   combinedOwnerCut: number
   saleEntries: SaleEntry[]
   saleTypes: SaleType[]
+  sextingOwnerPercent: number
+  customsOwnerPercent: number
   ownerSubmissions: OwnerSubmission[]
   exchangeRate: number
   exchangeRateDate: string
@@ -188,7 +191,7 @@ export async function generateOwnerInvoicePdf(input: {
   doc.setTextColor(...PINK)
   doc.text('INVOICE', 14, 26)
 
-  const logoHeight = 26 * 1.25
+  const logoHeight = 26 * 1.25 * 1.25
   const logoWidth = logoHeight * LOGO_ASPECT
   doc.addImage(logoDataUrl, 'PNG', 196 - logoWidth, 4, logoWidth, logoHeight)
   doc.setTextColor(...INK)
@@ -288,8 +291,12 @@ export async function generateOwnerInvoicePdf(input: {
 
     for (const date of dates) {
       const dayEntries = entriesByDate.get(date)!
-      const unlockTipRows = dayEntries.filter((entry) => entry.section === 'sexting').map((entry) => toDailyRow(entry, input.saleTypes))
-      const customRows = dayEntries.filter((entry) => entry.section === 'customs').map((entry) => toDailyRow(entry, input.saleTypes))
+      const unlockTipRows = dayEntries
+        .filter((entry) => entry.section === 'sexting')
+        .map((entry) => toDailyRow(entry, input.saleTypes, input.sextingOwnerPercent, input.customsOwnerPercent))
+      const customRows = dayEntries
+        .filter((entry) => entry.section === 'customs')
+        .map((entry) => toDailyRow(entry, input.saleTypes, input.sextingOwnerPercent, input.customsOwnerPercent))
 
       y2 = ensureSpace(doc, y2, 16)
       doc.setFontSize(12)

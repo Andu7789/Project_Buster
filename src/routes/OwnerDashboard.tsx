@@ -35,12 +35,13 @@ import {
   setProfileStatus,
   setSaleTypeActive,
   updateClientNextInvoiceNumber,
+  updateClientOwnerPercents,
   updateClientPayoutDetails,
   updatePaymentMethodDetails,
   updateWorkerShare,
 } from '../data/queries'
 import { formatCurrency, getCurrentWeekRange, toISODate } from '../lib/dates'
-import { calcOwnerCut, clientPayoutTotal } from '../lib/earnings'
+import { calcOwnerCut, clientPayoutTotal, ownerCutPercentForSection } from '../lib/earnings'
 import { fetchUsdToGbpRate, type UsdToGbpRate } from '../lib/exchangeRate'
 import { generateOwnerInvoicePdf } from '../lib/invoicePdf'
 import { paymentMethodFields, paymentMethodLabel } from '../lib/paymentMethods'
@@ -485,6 +486,18 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     }
   }
 
+  async function handleUpdateClientOwnerPercents(
+    clientToUpdate: Client,
+    input: { pmSalesOwnerPercent: number; sextingOwnerPercent: number; customsOwnerPercent: number },
+  ) {
+    try {
+      const updated = await updateClientOwnerPercents(clientToUpdate.id, input)
+      setClients((previous) => previous.map((c) => (c.id === clientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
   async function handleAddSaleType(event: FormEvent) {
     event.preventDefault()
     setSaleTypeError(null)
@@ -728,10 +741,10 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       customsNet: netBySection.customs,
       workerCut: entries.reduce((sum, entry) => sum + entry.earnings, 0),
       ownerCut: (Object.keys(netBySection) as SaleSection[]).reduce(
-        (sum, section) => sum + calcOwnerCut(netBySection[section], section),
+        (sum, section) => sum + calcOwnerCut(netBySection[section], ownerCutPercentForSection(client, section)),
         0,
       ),
-      clientPayout: clientPayoutTotal(entries),
+      clientPayout: clientPayoutTotal(entries, client),
     })
     setClientInvoices((previous) => [created, ...previous])
     return created
@@ -765,6 +778,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     entryDate: string
     buyerUsername: string
     gross: number
+    defaultOwnerCutPercent: number
     ownerCutPercent?: number
   }) {
     const created = await addOwnerSubmission(input)
@@ -852,6 +866,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       combinedOwnerCut: ownerSubmissionsCut + clientInvoiceOwnerCut,
       saleEntries: weekEntries.filter((entry) => entry.client_id === client.id),
       saleTypes,
+      sextingOwnerPercent: client.sexting_owner_percent,
+      customsOwnerPercent: client.customs_owner_percent,
       ownerSubmissions: clientOwnerSubmissions,
       exchangeRate: exchangeRate.rate,
       exchangeRateDate: exchangeRate.date,
@@ -937,6 +953,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onToggleClient={handleToggleClient}
               onUpdateClientPayoutDetails={handleUpdateClientPayoutDetails}
               onUpdateClientNextInvoiceNumber={handleUpdateClientNextInvoiceNumber}
+              onUpdateClientOwnerPercents={handleUpdateClientOwnerPercents}
               saleTypes={saleTypes}
               newSaleTypeLabel={newSaleTypeLabel}
               addingSaleType={addingSaleType}
@@ -1051,6 +1068,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
       {selectedClient && (
         <ClientInvoiceModal
+          client={selectedClient}
           clientName={selectedClient.name}
           weekStart={currentWeekStart}
           weekEnd={currentWeekEnd}
@@ -1065,6 +1083,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
       {viewedInvoice && (
         <ClientInvoiceModal
+          client={clients.find((c) => c.id === viewedInvoice.client_id)}
           clientName={viewedInvoiceClientName}
           weekStart={viewedInvoice.week_start}
           weekEnd={viewedInvoice.week_end}

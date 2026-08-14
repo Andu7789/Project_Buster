@@ -20,24 +20,30 @@ export function calcEarnings(net: number, section: SaleSection): number {
   return net * EARNINGS_RATE[section]
 }
 
-export const OWNER_RATE: Record<SaleSection, number> = {
-  sexting: 0.2,
-  customs: 0.15,
+/** Fallback owner-cut percentages for entries with no client (the "General" bucket) - every real client has its own explicit percentages. */
+export const DEFAULT_SEXTING_OWNER_PERCENT = 20
+export const DEFAULT_CUSTOMS_OWNER_PERCENT = 15
+export const DEFAULT_PM_SALES_OWNER_PERCENT = 40
+
+export function ownerCutPercentForSection(client: Client | undefined, section: SaleSection): number {
+  if (!client) return section === 'sexting' ? DEFAULT_SEXTING_OWNER_PERCENT : DEFAULT_CUSTOMS_OWNER_PERCENT
+  return section === 'sexting' ? client.sexting_owner_percent : client.customs_owner_percent
 }
 
-export function calcOwnerCut(net: number, section: SaleSection): number {
-  return net * OWNER_RATE[section]
+/** ownerCutPercent is a whole-number percent (e.g. 20 for 20%), per-client - see buster_clients.sexting_owner_percent/customs_owner_percent. */
+export function calcOwnerCut(net: number, ownerCutPercent: number): number {
+  return net * (ownerCutPercent / 100)
 }
 
-export function calcClientPayout(net: number, section: SaleSection): number {
-  return net - calcEarnings(net, section) - calcOwnerCut(net, section)
+export function calcClientPayout(net: number, section: SaleSection, ownerCutPercent: number): number {
+  return net - calcEarnings(net, section) - calcOwnerCut(net, ownerCutPercent)
 }
 
-export function clientPayoutTotal(entries: SaleEntry[]): number {
+export function clientPayoutTotal(entries: SaleEntry[], client: Client | undefined): number {
   const netBySection: Record<SaleSection, number> = { sexting: 0, customs: 0 }
   for (const entry of entries) netBySection[entry.section] += entry.net
   return (Object.keys(netBySection) as SaleSection[]).reduce(
-    (sum, section) => sum + calcClientPayout(netBySection[section], section),
+    (sum, section) => sum + calcClientPayout(netBySection[section], section, ownerCutPercentForSection(client, section)),
     0,
   )
 }
@@ -48,12 +54,10 @@ export const ownerSubmissionCategoryLabel: Record<OwnerSubmissionCategory, strin
   livestreams: 'Customs',
 }
 
-export const OWNER_SUBMISSION_OWNER_RATE = 0.4
-
-/** overridePercent, when given, is a whole-number percent (e.g. 25 for 25%) that replaces the default rate for this one entry. */
-export function calcOwnerSubmissionCut(net: number, overridePercent?: number): number {
-  const rate = overridePercent !== undefined ? overridePercent / 100 : OWNER_SUBMISSION_OWNER_RATE
-  return net * rate
+/** defaultOwnerCutPercent and overridePercent are whole-number percents (e.g. 25 for 25%) - overridePercent, when given, replaces the client's default for this one entry. */
+export function calcOwnerSubmissionCut(net: number, defaultOwnerCutPercent: number, overridePercent?: number): number {
+  const percent = overridePercent !== undefined ? overridePercent : defaultOwnerCutPercent
+  return net * (percent / 100)
 }
 
 /**
@@ -116,7 +120,8 @@ export function breakdownByClientAndSection(entries: SaleEntry[], clients: Clien
     const clientKey = entry.client_id ?? 'general'
     clientKeys.add(clientKey)
     const key = `${clientKey}:${entry.section}`
-    const ownerCut = calcOwnerCut(entry.net, entry.section)
+    const client = clients.find((c) => c.id === entry.client_id)
+    const ownerCut = calcOwnerCut(entry.net, ownerCutPercentForSection(client, entry.section))
     const existing = rows.get(key)
     if (existing) {
       existing.gross += entry.gross
@@ -157,7 +162,8 @@ export function ownerCutByClient(entries: SaleEntry[], clients: Client[]): Clien
   const totals = new Map<string, ClientOwnerCutTotal>()
   for (const entry of entries) {
     const key = entry.client_id ?? 'general'
-    const cut = calcOwnerCut(entry.net, entry.section)
+    const client = clients.find((c) => c.id === entry.client_id)
+    const cut = calcOwnerCut(entry.net, ownerCutPercentForSection(client, entry.section))
     const existing = totals.get(key)
     if (existing) {
       existing[entry.section] += cut

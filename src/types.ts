@@ -47,6 +47,9 @@ export interface Client {
   real_name: string | null
   payment_method: PaymentMethodType | null
   next_invoice_number: number
+  pm_sales_owner_percent: number
+  sexting_owner_percent: number
+  customs_owner_percent: number
   active: boolean
   created_at: string
 }

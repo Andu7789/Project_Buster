@@ -378,6 +378,26 @@ export async function updateClientPayoutDetails(
   return data as Client
 }
 
+export async function updateClientOwnerPercents(
+  clientId: string,
+  input: { pmSalesOwnerPercent: number; sextingOwnerPercent: number; customsOwnerPercent: number },
+): Promise<Client> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_clients')
+    .update({
+      pm_sales_owner_percent: input.pmSalesOwnerPercent,
+      sexting_owner_percent: input.sextingOwnerPercent,
+      customs_owner_percent: input.customsOwnerPercent,
+    })
+    .eq('id', clientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Client
+}
+
 export async function updateClientNextInvoiceNumber(clientId: string, nextInvoiceNumber: number): Promise<Client> {
   const client = requireClient()
   const { data, error } = await client
@@ -656,11 +676,12 @@ export async function addOwnerSubmission(input: {
   entryDate: string
   buyerUsername: string
   gross: number
+  defaultOwnerCutPercent: number
   ownerCutPercent?: number
 }): Promise<OwnerSubmission> {
   const client = requireClient()
   const net = calcNet(input.gross)
-  const ownerCut = calcOwnerSubmissionCut(net, input.ownerCutPercent)
+  const ownerCut = calcOwnerSubmissionCut(net, input.defaultOwnerCutPercent, input.ownerCutPercent)
 
   const { data, error } = await client
     .from('buster_owner_submissions')

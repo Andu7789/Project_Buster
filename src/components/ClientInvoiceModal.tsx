@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { SubmissionStatusBadge } from './StatusBadge'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
-import { calcClientPayout, calcEarnings, calcOwnerCut, sectionLabel } from '../lib/earnings'
-import type { ClientInvoice, Profile, SaleEntry, SaleSection } from '../types'
+import { calcClientPayout, calcEarnings, calcOwnerCut, ownerCutPercentForSection, sectionLabel } from '../lib/earnings'
+import type { Client, ClientInvoice, Profile, SaleEntry, SaleSection } from '../types'
 
 const sections: SaleSection[] = ['sexting', 'customs']
 
@@ -36,6 +36,7 @@ function totalsByWorker(entries: SaleEntry[], workers: Profile[]): { name: strin
 }
 
 export function ClientInvoiceModal({
+  client,
   clientName,
   weekStart,
   weekEnd,
@@ -46,6 +47,7 @@ export function ClientInvoiceModal({
   onConfirm,
   onDelete,
 }: {
+  client: Client | undefined
   clientName: string
   weekStart: string
   weekEnd: string
@@ -66,8 +68,14 @@ export function ClientInvoiceModal({
   const byWorker = useMemo(() => totalsByWorker(entries, workers), [entries, workers])
 
   const workerCut = sections.reduce((sum, section) => sum + calcEarnings(bySection[section].net, section), 0)
-  const ownerCut = sections.reduce((sum, section) => sum + calcOwnerCut(bySection[section].net, section), 0)
-  const clientPayout = sections.reduce((sum, section) => sum + calcClientPayout(bySection[section].net, section), 0)
+  const ownerCut = sections.reduce(
+    (sum, section) => sum + calcOwnerCut(bySection[section].net, ownerCutPercentForSection(client, section)),
+    0,
+  )
+  const clientPayout = sections.reduce(
+    (sum, section) => sum + calcClientPayout(bySection[section].net, section, ownerCutPercentForSection(client, section)),
+    0,
+  )
 
   const weekLabel = formatWeekRange(weekStart, weekEnd)
 

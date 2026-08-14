@@ -86,10 +86,12 @@ function ClientRow({
         />
       </td>
       <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
-      <td className="roster-actions">
-        <button type="button" className="btn-outline" onClick={() => onToggleClient(clientRow)}>
-          {clientRow.active ? 'Deactivate' : 'Activate'}
-        </button>
+      <td>
+        <div className="roster-actions">
+          <button type="button" className="btn-outline" onClick={() => onToggleClient(clientRow)}>
+            {clientRow.active ? 'Deactivate' : 'Activate'}
+          </button>
+        </div>
       </td>
     </tr>
   )
@@ -509,10 +511,12 @@ export function TeamClientsSaleTypesTab({
                 <tr key={saleType.id}>
                   <td>{saleType.label}</td>
                   <td>{saleType.active ? 'Active' : 'Inactive'}</td>
-                  <td className="roster-actions">
-                    <button type="button" className="btn-outline" onClick={() => onToggleSaleType(saleType)}>
-                      {saleType.active ? 'Deactivate' : 'Activate'}
-                    </button>
+                  <td>
+                    <div className="roster-actions">
+                      <button type="button" className="btn-outline" onClick={() => onToggleSaleType(saleType)}>
+                        {saleType.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

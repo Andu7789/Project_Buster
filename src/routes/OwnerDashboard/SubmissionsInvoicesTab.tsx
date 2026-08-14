@@ -134,7 +134,7 @@ export function SubmissionsInvoicesTab({
             return (
               <HoverEffectItem key={client.id} index={index}>
                 <article
-                  className={`worker-card ${client.id === selectedClientId ? 'selected' : ''}`}
+                  className={`worker-card client-color-card entry-client-${index % 5} ${client.id === selectedClientId ? 'selected' : ''}`}
                   onClick={() => onSelectClient(client.id)}
                 >
                   <strong>{client.name}</strong>

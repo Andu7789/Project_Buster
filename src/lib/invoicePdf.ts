@@ -251,7 +251,7 @@ export function generateOwnerInvoicePdf(input: {
   // Page two - contractor entries (Sexting/Customs), grouped by day, oldest first.
   doc.addPage()
   doc.setFontSize(14)
-  doc.text(`Sexting Sales — ${input.clientName}`, 14, 20)
+  doc.text('Sexting Sales', 14, 20)
   let y2 = 20
 
   if (input.saleEntries.length === 0) {
@@ -295,7 +295,7 @@ export function generateOwnerInvoicePdf(input: {
 
   doc.addPage()
   doc.setFontSize(14)
-  doc.text(`PPV purchase and tips — ${input.clientName}`, 14, 20)
+  doc.text('PPV purchase and tips', 14, 20)
   let y3 = 20
 
   y3 = renderCategoryTable(doc, 'Purchases', purchaseRows, 'No purchases recorded for this client this week.', y3)

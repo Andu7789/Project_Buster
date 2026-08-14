@@ -486,6 +486,12 @@ a:focus-visible {
   border-color: var(--accent);
 }
 
+/* Client cards (as opposed to worker cards) reuse the same per-client palette as the contractor day-entry form's entry-client-N classes. */
+.worker-card.client-color-card {
+  background: var(--client-bg);
+  border-color: var(--client-border);
+}
+
 /* Hover-effect grid (shared sliding highlight, see src/components/HoverEffect) */
 
 .hover-effect-item {

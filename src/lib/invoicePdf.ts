@@ -1,7 +1,24 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import logoUrl from '../assets/invoice/ps-management-logo.jpg'
+import thankYouUrl from '../assets/invoice/ps-management-thankyou.jpg'
 import { calcOwnerCut } from './earnings'
 import type { OwnerSubmission, SaleEntry, SaleType } from '../types'
+
+const LOGO_ASPECT = 1254 / 1254
+const THANK_YOU_ASPECT = 607 / 380
+
+/** Resolves a Vite asset import (a data: URI if inlined, otherwise a URL) to a data: URI jsPDF's addImage can embed. */
+async function toDataUrl(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url
+  const blob = await (await fetch(url)).blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
 
 function formatUsd(usdAmount: number): string {
   return `$${usdAmount.toFixed(2)}`
@@ -19,49 +36,6 @@ const PINK: [number, number, number] = [233, 114, 156]
 const PINK_LIGHT: [number, number, number] = [255, 229, 238]
 const INK: [number, number, number] = [30, 30, 30]
 const INK_MUTED: [number, number, number] = [110, 110, 110]
-
-/** Draws a small 4-point sparkle (two overlapping diamonds) - the accent next to the PS Management wordmark. */
-function drawSparkle(doc: jsPDF, cx: number, cy: number, size: number): void {
-  doc.setFillColor(...PINK)
-  const long = size
-  const short = size * 0.32
-  // Vertical diamond.
-  doc.triangle(cx, cy - long, cx + short, cy, cx, cy + long, 'F')
-  doc.triangle(cx, cy - long, cx - short, cy, cx, cy + long, 'F')
-  // Horizontal diamond.
-  const long2 = size * 0.55
-  const short2 = size * 0.18
-  doc.triangle(cx - long2, cy, cx, cy - short2, cx + long2, cy, 'F')
-  doc.triangle(cx - long2, cy, cx, cy + short2, cx + long2, cy, 'F')
-}
-
-/** Draws a filled pink circle with a white envelope glyph inside it. */
-function drawEmailIcon(doc: jsPDF, cx: number, cy: number, r: number): void {
-  doc.setFillColor(...PINK)
-  doc.circle(cx, cy, r, 'F')
-
-  const w = r * 1.3
-  const h = r * 0.9
-  const left = cx - w / 2
-  const top = cy - h / 2
-  doc.setFillColor(255, 255, 255)
-  doc.rect(left, top, w, h, 'F')
-
-  doc.setDrawColor(...PINK)
-  doc.setLineWidth(0.35)
-  doc.line(left, top, cx, top + h * 0.55)
-  doc.line(cx, top + h * 0.55, left + w, top)
-}
-
-/** Draws a filled pink circle with a white paper-plane glyph inside it. */
-function drawTelegramIcon(doc: jsPDF, cx: number, cy: number, r: number): void {
-  doc.setFillColor(...PINK)
-  doc.circle(cx, cy, r, 'F')
-
-  doc.setFillColor(255, 255, 255)
-  doc.triangle(cx - r * 0.6, cy + r * 0.35, cx + r * 0.65, cy - r * 0.05, cx - r * 0.05, cy + r * 0.05, 'F')
-  doc.triangle(cx - r * 0.05, cy + r * 0.05, cx + r * 0.65, cy - r * 0.05, cx - r * 0.25, cy + r * 0.55, 'F')
-}
 
 /** Draws a label above a bold value above a pink underline - the invoice's Invoice Number/Date Issued/Bill to/Date Due fields. */
 function drawField(doc: jsPDF, label: string, value: string, x: number, y: number, width: number): void {
@@ -185,7 +159,7 @@ function renderDailyTable(doc: jsPDF, title: string, rows: DailyEntryRow[], star
  * owner's own submissions split into a Purchases table (Subscriptions and Livestreams
  * categories) and a Tips table - internal reference pages, not shown to the client.
  */
-export function generateOwnerInvoicePdf(input: {
+export async function generateOwnerInvoicePdf(input: {
   clientName: string
   weekStart: string
   weekEnd: string
@@ -203,8 +177,9 @@ export function generateOwnerInvoicePdf(input: {
   billToName: string
   paymentMethodLabel: string | null
   paymentMethodLines: string[]
-}): void {
+}): Promise<void> {
   const { exchangeRate: rate } = input
+  const [logoDataUrl, thankYouDataUrl] = await Promise.all([toDataUrl(logoUrl), toDataUrl(thankYouUrl)])
   const doc = new jsPDF()
 
   // Page one - the client-facing invoice.
@@ -213,13 +188,9 @@ export function generateOwnerInvoicePdf(input: {
   doc.setTextColor(...PINK)
   doc.text('INVOICE', 14, 26)
 
-  doc.setFont('times', 'bold')
-  doc.setFontSize(26)
-  doc.text('PS', 196, 20, { align: 'right' })
-  drawSparkle(doc, 198, 9, 2.4)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.text('M A N A G E M E N T', 196, 26, { align: 'right' })
+  const logoHeight = 26
+  const logoWidth = logoHeight * LOGO_ASPECT
+  doc.addImage(logoDataUrl, 'JPEG', 196 - logoWidth, 4, logoWidth, logoHeight)
   doc.setTextColor(...INK)
 
   drawField(doc, 'Invoice Number:', `#${input.invoiceNumber}`, 14, 46, 85)
@@ -271,40 +242,31 @@ export function generateOwnerInvoicePdf(input: {
   })
 
   const afterTableY = lastAutoTableY(doc)
-  const thankYouY = afterTableY + 20
+  const thankYouImgY = afterTableY + 10
+  const thankYouImgWidth = 95
+  const thankYouImgHeight = thankYouImgWidth / THANK_YOU_ASPECT
+  doc.addImage(thankYouDataUrl, 'JPEG', 14, thankYouImgY, thankYouImgWidth, thankYouImgHeight)
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.setTextColor(...PINK)
-  doc.text('THANK YOU!', 14, thankYouY)
+  const totalOwedCenterY = thankYouImgY + thankYouImgHeight * 0.19
 
   doc.setFillColor(...PINK_LIGHT)
   doc.setDrawColor(...PINK)
-  doc.rect(110, thankYouY - 9, 86, 12, 'FD')
+  doc.rect(110, totalOwedCenterY - 6, 86, 12, 'FD')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...INK)
-  doc.text(`Total Owed: ${formatGbp(input.combinedOwnerCut, rate)}`, 114, thankYouY - 1)
+  doc.text(`Total Owed: ${formatGbp(input.combinedOwnerCut, rate)}`, 114, totalOwedCenterY + 2)
 
   doc.setDrawColor(...PINK)
   doc.setLineWidth(0.35)
-  doc.line(110, thankYouY + 10, 196, thankYouY + 10)
-  doc.line(110, thankYouY + 16, 196, thankYouY + 16)
-  doc.line(110, thankYouY + 22, 196, thankYouY + 22)
+  doc.line(110, totalOwedCenterY + 16, 196, totalOwedCenterY + 16)
+  doc.line(110, totalOwedCenterY + 22, 196, totalOwedCenterY + 22)
+  doc.line(110, totalOwedCenterY + 28, 196, totalOwedCenterY + 28)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(...INK)
-  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, thankYouY + 8)
-
-  doc.setFontSize(10)
-  const contactIconRadius = 3.2
-  const contactY1 = thankYouY + 19
-  const contactY2 = thankYouY + 28
-  drawEmailIcon(doc, 14 + contactIconRadius, contactY1 - 1.3, contactIconRadius)
-  doc.text('contact@psmanagementltd.co.uk', 14 + contactIconRadius * 2 + 4, contactY1)
-  drawTelegramIcon(doc, 14 + contactIconRadius, contactY2 - 1.3, contactIconRadius)
-  doc.text('Telegram: @PSManagementx', 14 + contactIconRadius * 2 + 4, contactY2)
+  doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, thankYouImgY + thankYouImgHeight + 8)
 
   // Page two - contractor entries (Sexting/Customs), grouped by day, oldest first.
   doc.addPage()

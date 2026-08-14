@@ -843,7 +843,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           .map((field) => `${field.label}: ${field.value}`)
       : []
 
-    generateOwnerInvoicePdf({
+    await generateOwnerInvoicePdf({
       clientName: client.real_name?.trim() || client.name,
       weekStart: currentWeekStart,
       weekEnd: currentWeekEnd,

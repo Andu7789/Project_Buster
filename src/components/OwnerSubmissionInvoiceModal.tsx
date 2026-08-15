@@ -18,6 +18,8 @@ export function OwnerSubmissionInvoiceModal({
   subscriptionsOwnerCut,
   tipsOwnerCut,
   livestreamsOwnerCut,
+  paigeSextingOwnerCut,
+  alexSextingOwnerCut,
   ownerSubmissionsCut,
   clientInvoiceOwnerCut,
   hasClientInvoice,
@@ -34,6 +36,8 @@ export function OwnerSubmissionInvoiceModal({
   subscriptionsOwnerCut: number
   tipsOwnerCut: number
   livestreamsOwnerCut: number
+  paigeSextingOwnerCut: number
+  alexSextingOwnerCut: number
   ownerSubmissionsCut: number
   clientInvoiceOwnerCut: number
   hasClientInvoice: boolean
@@ -151,11 +155,11 @@ export function OwnerSubmissionInvoiceModal({
 
         <div className="invoice-lines">
           <div className="invoice-line">
-            <span>Owner submissions cut</span>
+            <span>PPV Purchases &amp; Tips cut</span>
             <span>{formatCurrency(invoice.owner_submissions_cut)}</span>
           </div>
           <div className="invoice-line">
-            <span>Client invoice owner cut</span>
+            <span>Sexting Sales &amp; Customs cut</span>
             <span>{formatCurrency(invoice.client_invoice_owner_cut)}</span>
           </div>
           <div className="invoice-line invoice-line-total">
@@ -204,7 +208,15 @@ export function OwnerSubmissionInvoiceModal({
           <strong>{formatCurrency(livestreamsOwnerCut)}</strong>
         </div>
         <div>
-          <p className="label">Client invoice owner cut</p>
+          <p className="label">{ownerSubmissionCategoryLabel.paige_sexting}</p>
+          <strong>{formatCurrency(paigeSextingOwnerCut)}</strong>
+        </div>
+        <div>
+          <p className="label">{ownerSubmissionCategoryLabel.alex_sexting}</p>
+          <strong>{formatCurrency(alexSextingOwnerCut)}</strong>
+        </div>
+        <div>
+          <p className="label">Sexting Sales &amp; Customs cut</p>
           <strong>{formatCurrency(clientInvoiceOwnerCut)}</strong>
         </div>
         <div>
@@ -239,13 +251,21 @@ export function OwnerSubmissionInvoiceModal({
             <td>{ownerSubmissionCategoryLabel.livestreams}</td>
             <td>{formatCurrency(livestreamsOwnerCut)}</td>
           </tr>
+          <tr>
+            <td>{ownerSubmissionCategoryLabel.paige_sexting}</td>
+            <td>{formatCurrency(paigeSextingOwnerCut)}</td>
+          </tr>
+          <tr>
+            <td>{ownerSubmissionCategoryLabel.alex_sexting}</td>
+            <td>{formatCurrency(alexSextingOwnerCut)}</td>
+          </tr>
         </tbody>
       </table>
 
       {!hasClientInvoice && (
         <p className="message message-info">
-          No client invoice has been created yet for this week — the client invoice owner cut above will show as $0
-          until one is created from the Submissions & Invoices tab.
+          No client invoice has been created yet for this week — the Sexting Sales &amp; Customs cut above won't
+          include the contractor portion until one is created from the Submissions &amp; Invoices tab.
         </p>
       )}
 

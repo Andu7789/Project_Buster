@@ -3,6 +3,7 @@ import { HoverEffectItem } from '../../components/HoverEffect/HoverEffectItem'
 import { SubmissionStatusBadge } from '../../components/StatusBadge'
 import { formatCurrency, formatWeekRange } from '../../lib/dates'
 import { clientPayoutTotal } from '../../lib/earnings'
+import { clientColorVars } from '../../lib/clientColor'
 import type { Client, ClientInvoice, Profile, SaleEntry, Submission } from '../../types'
 
 export function SubmissionsInvoicesTab({
@@ -134,7 +135,8 @@ export function SubmissionsInvoicesTab({
             return (
               <HoverEffectItem key={client.id} index={index}>
                 <article
-                  className={`worker-card client-color-card entry-client-${index % 5} ${client.id === selectedClientId ? 'selected' : ''}`}
+                  className={`worker-card client-color-card ${client.id === selectedClientId ? 'selected' : ''}`}
+                  style={clientColorVars(client.color)}
                   onClick={() => onSelectClient(client.id)}
                 >
                   <strong>{client.name}</strong>

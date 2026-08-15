@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { ProfileStatusBadge } from '../../components/StatusBadge'
+import { ClientColorPicker } from '../../components/ClientColorPicker'
 import { paymentMethodLabel, paymentMethods as paymentMethodOptions } from '../../lib/paymentMethods'
 import type { Client, PaymentMethodType, Profile, ProfileStatus, SaleType } from '../../types'
 
@@ -8,11 +9,13 @@ function ClientRow({
   onToggleClient,
   onUpdatePayoutDetails,
   onUpdateNextInvoiceNumber,
+  onUpdateColor,
 }: {
   clientRow: Client
   onToggleClient: (client: Client) => void
   onUpdatePayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
   onUpdateNextInvoiceNumber: (client: Client, value: number) => void
+  onUpdateColor: (client: Client, color: string) => void
 }) {
   const [realNameDraft, setRealNameDraft] = useState(clientRow.real_name ?? '')
   const [syncedRealName, setSyncedRealName] = useState(clientRow.real_name)
@@ -48,6 +51,13 @@ function ClientRow({
   return (
     <tr>
       <td>{clientRow.name}</td>
+      <td>
+        <ClientColorPicker
+          value={clientRow.color}
+          onChange={(color) => onUpdateColor(clientRow, color)}
+          label={`Change ${clientRow.name}'s color`}
+        />
+      </td>
       <td>
         <input
           value={realNameDraft}
@@ -208,14 +218,17 @@ export function TeamClientsSaleTypesTab({
   onDeleteWorker,
   clients,
   newClientName,
+  newClientColor,
   addingClient,
   clientError,
   onNewClientNameChange,
+  onNewClientColorChange,
   onAddClient,
   onToggleClient,
   onUpdateClientPayoutDetails,
   onUpdateClientNextInvoiceNumber,
   onUpdateClientOwnerPercents,
+  onUpdateClientColor,
   saleTypes,
   newSaleTypeLabel,
   addingSaleType,
@@ -248,13 +261,16 @@ export function TeamClientsSaleTypesTab({
   onDeleteWorker: (worker: Profile) => void
   clients: Client[]
   newClientName: string
+  newClientColor: string
   addingClient: boolean
   clientError: string | null
   onNewClientNameChange: (value: string) => void
+  onNewClientColorChange: (value: string) => void
   onAddClient: (event: FormEvent) => void
   onToggleClient: (client: Client) => void
   onUpdateClientPayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
   onUpdateClientNextInvoiceNumber: (client: Client, value: number) => void
+  onUpdateClientColor: (client: Client, color: string) => void
   onUpdateClientOwnerPercents: (
     client: Client,
     input: { pmSalesOwnerPercent: number; sextingOwnerPercent: number; customsOwnerPercent: number },
@@ -405,6 +421,10 @@ export function TeamClientsSaleTypesTab({
             Client name
             <input value={newClientName} onChange={(event) => onNewClientNameChange(event.target.value)} placeholder="Sav" />
           </label>
+          <label>
+            Color
+            <ClientColorPicker value={newClientColor} onChange={onNewClientColorChange} label="Choose a color for this client" />
+          </label>
           <button type="submit" className="btn-primary" disabled={addingClient}>
             {addingClient ? 'Adding…' : 'Add client'}
           </button>
@@ -416,6 +436,7 @@ export function TeamClientsSaleTypesTab({
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Color</th>
                 <th>Real name</th>
                 <th>Payment method</th>
                 <th>Next invoice #</th>
@@ -431,11 +452,12 @@ export function TeamClientsSaleTypesTab({
                   onToggleClient={onToggleClient}
                   onUpdatePayoutDetails={onUpdateClientPayoutDetails}
                   onUpdateNextInvoiceNumber={onUpdateClientNextInvoiceNumber}
+                  onUpdateColor={onUpdateClientColor}
                 />
               ))}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="empty-row">
+                  <td colSpan={7} className="empty-row">
                     No clients yet — add your first one above.
                   </td>
                 </tr>

@@ -50,6 +50,7 @@ export interface Client {
   pm_sales_owner_percent: number
   sexting_owner_percent: number
   customs_owner_percent: number
+  color: string
   active: boolean
   created_at: string
 }
@@ -107,7 +108,7 @@ export interface ClientInvoice {
   created_at: string
 }
 
-export type OwnerSubmissionCategory = 'subscriptions' | 'tips' | 'livestreams'
+export type OwnerSubmissionCategory = 'subscriptions' | 'tips' | 'livestreams' | 'paige_sexting' | 'alex_sexting'
 
 export interface OwnerSubmission {
   id: string
@@ -129,6 +130,8 @@ export interface OwnerSubmissionInvoice {
   subscriptions_owner_cut: number
   tips_owner_cut: number
   livestreams_owner_cut: number
+  paige_sexting_owner_cut: number
+  alex_sexting_owner_cut: number
   owner_submissions_cut: number
   client_invoice_owner_cut: number
   combined_owner_cut: number

@@ -52,7 +52,18 @@ export const ownerSubmissionCategoryLabel: Record<OwnerSubmissionCategory, strin
   subscriptions: 'Purchases',
   tips: 'Tips',
   livestreams: 'Customs',
+  paige_sexting: 'Paige sexting',
+  alex_sexting: 'Alex sexting',
 }
+
+/**
+ * subscriptions/tips/livestreams feed the "PPV Purchases & Tips" invoice
+ * total; paige_sexting/alex_sexting feed "Sexting Sales & Customs" instead
+ * (alongside contractor buster_sale_entries), since they're the same kind of
+ * sale a contractor logs, just entered by the owner directly.
+ */
+export const PPV_OWNER_SUBMISSION_CATEGORIES: OwnerSubmissionCategory[] = ['subscriptions', 'tips', 'livestreams']
+export const SEXTING_OWNER_SUBMISSION_CATEGORIES: OwnerSubmissionCategory[] = ['paige_sexting', 'alex_sexting']
 
 /** defaultOwnerCutPercent and overridePercent are whole-number percents (e.g. 25 for 25%) - overridePercent, when given, replaces the client's default for this one entry. */
 export function calcOwnerSubmissionCut(net: number, defaultOwnerCutPercent: number, overridePercent?: number): number {

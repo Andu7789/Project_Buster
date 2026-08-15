@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import logoUrl from '../assets/invoice/ps-management-logo.png'
 import thankYouUrl from '../assets/invoice/ps-management-thankyou.jpg'
-import { calcOwnerCut } from './earnings'
+import { calcOwnerCut, ownerSubmissionCategoryLabel } from './earnings'
 import type { OwnerSubmission, SaleEntry, SaleType } from '../types'
 
 const LOGO_ASPECT = 1254 / 1254
@@ -156,9 +156,11 @@ function renderDailyTable(doc: jsPDF, title: string, rows: DailyEntryRow[], star
  * Number/Date Issued/Bill to/Date Due, the client's payment method, and a Service
  * Description/Total (USD)/Total (GBP) summary table) modelled on the owner's Canva
  * template; page two lists the contractor Sexting/Customs entries broken down by day
- * (an Unlocks & Tips table plus a Customs table per day), and page three lists the
- * owner's own submissions split into a Purchases table (Subscriptions and Livestreams
- * categories) and a Tips table - internal reference pages, not shown to the client.
+ * (an Unlocks & Tips table plus a Customs table per day), followed by the owner's own
+ * Paige sexting / Alex sexting entries (same "Sexting Sales & Customs" total as the
+ * contractor entries above); page three lists the owner's remaining submissions split
+ * into a Purchases table (Subscriptions and Livestreams categories) and a Tips table -
+ * internal reference pages, not shown to the client.
  */
 export async function generateOwnerInvoicePdf(input: {
   clientName: string
@@ -172,6 +174,7 @@ export async function generateOwnerInvoicePdf(input: {
   sextingOwnerPercent: number
   customsOwnerPercent: number
   ownerSubmissions: OwnerSubmission[]
+  sextingOwnerSubmissions: OwnerSubmission[]
   exchangeRate: number
   exchangeRateDate: string
   invoiceNumber: number
@@ -308,6 +311,26 @@ export async function generateOwnerInvoicePdf(input: {
       y2 += 4
     }
   }
+
+  // Page two continued - the owner's own Paige sexting / Alex sexting entries, same total as above.
+  const paigeSextingRows: CategoryEntryRow[] = input.sextingOwnerSubmissions
+    .filter((entry) => entry.category === 'paige_sexting')
+    .map((entry) => ({ date: entry.entry_date, user: entry.buyer_username, gross: entry.gross, net: entry.net, earnings: entry.owner_cut }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const alexSextingRows: CategoryEntryRow[] = input.sextingOwnerSubmissions
+    .filter((entry) => entry.category === 'alex_sexting')
+    .map((entry) => ({ date: entry.entry_date, user: entry.buyer_username, gross: entry.gross, net: entry.net, earnings: entry.owner_cut }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  y2 = renderCategoryTable(
+    doc,
+    ownerSubmissionCategoryLabel.paige_sexting,
+    paigeSextingRows,
+    'No Paige sexting recorded for this client this week.',
+    y2,
+  )
+  renderCategoryTable(doc, ownerSubmissionCategoryLabel.alex_sexting, alexSextingRows, 'No Alex sexting recorded for this client this week.', y2)
 
   // Page three - owner submissions, split into Purchases (Subscriptions/Livestreams) and Tips.
   const purchaseRows: CategoryEntryRow[] = input.ownerSubmissions

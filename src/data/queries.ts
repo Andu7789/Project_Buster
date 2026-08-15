@@ -349,9 +349,16 @@ export async function listClients(): Promise<Client[]> {
   return (data ?? []) as Client[]
 }
 
-export async function addClient(name: string): Promise<Client> {
+export async function addClient(name: string, color: string): Promise<Client> {
   const client = requireClient()
-  const { data, error } = await client.from('buster_clients').insert({ name: name.trim() }).select('*').single()
+  const { data, error } = await client.from('buster_clients').insert({ name: name.trim(), color }).select('*').single()
+  if (error) throw error
+  return data as Client
+}
+
+export async function updateClientColor(clientId: string, color: string): Promise<Client> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_clients').update({ color }).eq('id', clientId).select('*').single()
   if (error) throw error
   return data as Client
 }
@@ -725,6 +732,8 @@ export async function createOwnerSubmissionInvoice(input: {
   subscriptionsOwnerCut: number
   tipsOwnerCut: number
   livestreamsOwnerCut: number
+  paigeSextingOwnerCut: number
+  alexSextingOwnerCut: number
   ownerSubmissionsCut: number
   clientInvoiceOwnerCut: number
   combinedOwnerCut: number
@@ -739,6 +748,8 @@ export async function createOwnerSubmissionInvoice(input: {
       subscriptions_owner_cut: input.subscriptionsOwnerCut,
       tips_owner_cut: input.tipsOwnerCut,
       livestreams_owner_cut: input.livestreamsOwnerCut,
+      paige_sexting_owner_cut: input.paigeSextingOwnerCut,
+      alex_sexting_owner_cut: input.alexSextingOwnerCut,
       owner_submissions_cut: input.ownerSubmissionsCut,
       client_invoice_owner_cut: input.clientInvoiceOwnerCut,
       combined_owner_cut: input.combinedOwnerCut,

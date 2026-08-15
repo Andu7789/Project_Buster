@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { addSaleEntry, deleteSaleEntry } from '../data/queries'
 import { calcEarnings, calcNet, sectionLabel } from '../lib/earnings'
 import { formatCurrency } from '../lib/dates'
+import { clientColorVars } from '../lib/clientColor'
 import type { Client, SaleEntry, SaleSection, SaleType } from '../types'
 
 const sections: SaleSection[] = ['sexting', 'customs']
@@ -221,8 +222,8 @@ export function DayEntryModal({
       {activeClients.length === 0 ? (
         <p className="info-text">No clients configured yet — ask your admin to add one.</p>
       ) : (
-        activeClients.map((client, index) => (
-          <div key={client.id} className={`entry-client entry-client-${index % 5}`}>
+        activeClients.map((client) => (
+          <div key={client.id} className="entry-client" style={clientColorVars(client.color)}>
             <h3>{client.name}</h3>
             {sections.map((section) => (
               <ClientSection

@@ -486,10 +486,61 @@ a:focus-visible {
   border-color: var(--accent);
 }
 
-/* Client cards (as opposed to worker cards) reuse the same per-client palette as the contractor day-entry form's entry-client-N classes. */
+/* Client cards (as opposed to worker cards) reuse each client's own --client-bg/--client-border, set inline from their stored color. */
 .worker-card.client-color-card {
   background: var(--client-bg);
   border-color: var(--client-border);
+}
+
+/* Client color picker (Team, Clients & Sale Types, and the add-client form) */
+
+.color-picker {
+  position: relative;
+  display: inline-block;
+}
+
+.color-swatch-trigger {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch-trigger:hover,
+.color-swatch-trigger:focus-visible {
+  box-shadow: 0 0 0 1px var(--accent-strong);
+}
+
+.color-swatch-grid {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: var(--z-sticky);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch.selected {
+  box-shadow: 0 0 0 2px var(--accent-strong);
 }
 
 /* Hover-effect grid (shared sliding highlight, see src/components/HoverEffect) */
@@ -836,31 +887,6 @@ a:focus-visible {
   border: 1px solid var(--client-border);
   border-radius: var(--radius-md);
   background: var(--client-bg);
-}
-
-.entry-client-0 {
-  --client-bg: #eef1fc;
-  --client-border: #d9e0f5;
-}
-
-.entry-client-1 {
-  --client-bg: #fdece0;
-  --client-border: #f6d9b8;
-}
-
-.entry-client-2 {
-  --client-bg: #e6f5ec;
-  --client-border: #c9e8d4;
-}
-
-.entry-client-3 {
-  --client-bg: #f8e8f2;
-  --client-border: #edd0e3;
-}
-
-.entry-client-4 {
-  --client-bg: #fdf6df;
-  --client-border: #f0e0a8;
 }
 
 .entry-client h3 {

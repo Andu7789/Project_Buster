@@ -34,6 +34,7 @@ import {
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
+  updateClientColor,
   updateClientNextInvoiceNumber,
   updateClientOwnerPercents,
   updateClientPayoutDetails,
@@ -41,7 +42,14 @@ import {
   updateWorkerShare,
 } from '../data/queries'
 import { formatCurrency, getCurrentWeekRange, toISODate } from '../lib/dates'
-import { calcOwnerCut, clientPayoutTotal, ownerCutPercentForSection } from '../lib/earnings'
+import {
+  calcOwnerCut,
+  clientPayoutTotal,
+  ownerCutPercentForSection,
+  PPV_OWNER_SUBMISSION_CATEGORIES,
+  SEXTING_OWNER_SUBMISSION_CATEGORIES,
+} from '../lib/earnings'
+import { DEFAULT_CLIENT_COLOR, nextClientColor } from '../lib/clientColor'
 import { fetchUsdToGbpRate, type UsdToGbpRate } from '../lib/exchangeRate'
 import { generateOwnerInvoicePdf } from '../lib/invoicePdf'
 import { paymentMethodFields, paymentMethodLabel } from '../lib/paymentMethods'
@@ -105,6 +113,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [viewedInvoiceEntries, setViewedInvoiceEntries] = useState<SaleEntry[]>([])
 
   const [newClientName, setNewClientName] = useState('')
+  const [newClientColor, setNewClientColor] = useState(DEFAULT_CLIENT_COLOR)
   const [addingClient, setAddingClient] = useState(false)
   const [clientError, setClientError] = useState<string | null>(null)
 
@@ -185,6 +194,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setWorkers(workerData)
           setSubmissions(submissionData)
           setClients(clientData)
+          setNewClientColor(nextClientColor(clientData.map((client) => client.color)))
           setSaleTypes(saleTypeData)
           setWeekEntries(weekEntryData)
           setClientInvoices(clientInvoiceData)
@@ -264,6 +274,12 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     livestreams: selectedOwnerSubmissionEntries
       .filter((entry) => entry.category === 'livestreams')
       .reduce((sum, entry) => sum + entry.owner_cut, 0),
+    paigeSexting: selectedOwnerSubmissionEntries
+      .filter((entry) => entry.category === 'paige_sexting')
+      .reduce((sum, entry) => sum + entry.owner_cut, 0),
+    alexSexting: selectedOwnerSubmissionEntries
+      .filter((entry) => entry.category === 'alex_sexting')
+      .reduce((sum, entry) => sum + entry.owner_cut, 0),
   }
   const selectedOwnerSubmissionsCut =
     selectedOwnerSubmissionsCutBySection.subscriptions +
@@ -274,6 +290,10 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
         (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === currentWeekStart,
       ) ?? null
     : null
+  const selectedSextingSalesAndCustomsCut =
+    (selectedOwnerSubmissionClientInvoice?.owner_cut ?? 0) +
+    selectedOwnerSubmissionsCutBySection.paigeSexting +
+    selectedOwnerSubmissionsCutBySection.alexSexting
   const selectedOwnerSubmissionInvoice = selectedOwnerSubmissionClientId
     ? ownerSubmissionInvoices.find(
         (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === currentWeekStart,
@@ -440,13 +460,23 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     }
     setAddingClient(true)
     try {
-      const created = await addClient(name)
+      const created = await addClient(name, newClientColor)
       setClients((previous) => [...previous, created])
+      setNewClientColor(nextClientColor([...clients, created].map((client) => client.color)))
       setNewClientName('')
     } catch (err) {
       setClientError(err instanceof Error ? err.message : 'Could not add this client.')
     } finally {
       setAddingClient(false)
+    }
+  }
+
+  async function handleUpdateClientColor(clientToUpdate: Client, color: string) {
+    try {
+      const updated = await updateClientColor(clientToUpdate.id, color)
+      setClients((previous) => previous.map((c) => (c.id === clientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not update this client.')
     }
   }
 
@@ -798,10 +828,15 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     const subscriptionsOwnerCut = cutFor('subscriptions')
     const tipsOwnerCut = cutFor('tips')
     const livestreamsOwnerCut = cutFor('livestreams')
+    const paigeSextingOwnerCut = cutFor('paige_sexting')
+    const alexSextingOwnerCut = cutFor('alex_sexting')
+    // Purchases/Tips/Customs make up "PPV Purchases & Tips"; Paige/Alex sexting fold into
+    // "Sexting Sales & Customs" alongside the contractor entries below, not here.
     const ownerSubmissionsCut = subscriptionsOwnerCut + tipsOwnerCut + livestreamsOwnerCut
-    const clientInvoiceOwnerCut =
+    const contractorInvoiceOwnerCut =
       clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
         ?.owner_cut ?? 0
+    const clientInvoiceOwnerCut = contractorInvoiceOwnerCut + paigeSextingOwnerCut + alexSextingOwnerCut
 
     const created = await createOwnerSubmissionInvoice({
       clientId: client.id,
@@ -810,6 +845,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       subscriptionsOwnerCut,
       tipsOwnerCut,
       livestreamsOwnerCut,
+      paigeSextingOwnerCut,
+      alexSextingOwnerCut,
       ownerSubmissionsCut,
       clientInvoiceOwnerCut,
       combinedOwnerCut: ownerSubmissionsCut + clientInvoiceOwnerCut,
@@ -831,11 +868,19 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   }
 
   async function handleDownloadOwnerInvoicePdf(client: Client) {
-    const clientInvoiceOwnerCut =
+    const contractorInvoiceOwnerCut =
       clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
         ?.owner_cut ?? 0
     const clientOwnerSubmissions = ownerSubmissions.filter((entry) => entry.client_id === client.id)
-    const ownerSubmissionsCut = clientOwnerSubmissions.reduce((sum, entry) => sum + entry.owner_cut, 0)
+    // Paid/Alex sexting fold into "Sexting Sales & Customs" (with the contractor cut above and
+    // page-two PDF entries) rather than "PPV Purchases & Tips" - see PPV_OWNER_SUBMISSION_CATEGORIES.
+    const ppvOwnerSubmissions = clientOwnerSubmissions.filter((entry) => PPV_OWNER_SUBMISSION_CATEGORIES.includes(entry.category))
+    const sextingOwnerSubmissions = clientOwnerSubmissions.filter((entry) =>
+      SEXTING_OWNER_SUBMISSION_CATEGORIES.includes(entry.category),
+    )
+    const ownerSubmissionsCut = ppvOwnerSubmissions.reduce((sum, entry) => sum + entry.owner_cut, 0)
+    const sextingSubmissionsCut = sextingOwnerSubmissions.reduce((sum, entry) => sum + entry.owner_cut, 0)
+    const clientInvoiceOwnerCut = contractorInvoiceOwnerCut + sextingSubmissionsCut
 
     let exchangeRate: UsdToGbpRate
     try {
@@ -868,7 +913,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       saleTypes,
       sextingOwnerPercent: client.sexting_owner_percent,
       customsOwnerPercent: client.customs_owner_percent,
-      ownerSubmissions: clientOwnerSubmissions,
+      ownerSubmissions: ppvOwnerSubmissions,
+      sextingOwnerSubmissions,
       exchangeRate: exchangeRate.rate,
       exchangeRateDate: exchangeRate.date,
       invoiceNumber: client.next_invoice_number,
@@ -946,14 +992,17 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onDeleteWorker={handleDeleteWorker}
               clients={clients}
               newClientName={newClientName}
+              newClientColor={newClientColor}
               addingClient={addingClient}
               clientError={clientError}
               onNewClientNameChange={setNewClientName}
+              onNewClientColorChange={setNewClientColor}
               onAddClient={handleAddClient}
               onToggleClient={handleToggleClient}
               onUpdateClientPayoutDetails={handleUpdateClientPayoutDetails}
               onUpdateClientNextInvoiceNumber={handleUpdateClientNextInvoiceNumber}
               onUpdateClientOwnerPercents={handleUpdateClientOwnerPercents}
+              onUpdateClientColor={handleUpdateClientColor}
               saleTypes={saleTypes}
               newSaleTypeLabel={newSaleTypeLabel}
               addingSaleType={addingSaleType}
@@ -1104,8 +1153,10 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           subscriptionsOwnerCut={selectedOwnerSubmissionsCutBySection.subscriptions}
           tipsOwnerCut={selectedOwnerSubmissionsCutBySection.tips}
           livestreamsOwnerCut={selectedOwnerSubmissionsCutBySection.livestreams}
+          paigeSextingOwnerCut={selectedOwnerSubmissionsCutBySection.paigeSexting}
+          alexSextingOwnerCut={selectedOwnerSubmissionsCutBySection.alexSexting}
           ownerSubmissionsCut={selectedOwnerSubmissionsCut}
-          clientInvoiceOwnerCut={selectedOwnerSubmissionClientInvoice?.owner_cut ?? 0}
+          clientInvoiceOwnerCut={selectedSextingSalesAndCustomsCut}
           hasClientInvoice={selectedOwnerSubmissionClientInvoice !== null}
           existingInvoice={selectedOwnerSubmissionInvoice}
           pendingContractors={selectedOwnerSubmissionPendingContractors}

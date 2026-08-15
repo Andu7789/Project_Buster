@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { formatCurrency, formatWeekRange, toISODate } from '../../lib/dates'
-import { calcNet, calcOwnerSubmissionCut, ownerSubmissionCategoryLabel } from '../../lib/earnings'
+import {
+  calcNet,
+  calcOwnerSubmissionCut,
+  ownerSubmissionCategoryLabel,
+  PPV_OWNER_SUBMISSION_CATEGORIES,
+  SEXTING_OWNER_SUBMISSION_CATEGORIES,
+} from '../../lib/earnings'
+import { clientColorVars } from '../../lib/clientColor'
 import { SubmissionStatusBadge } from '../../components/StatusBadge'
 import type { Client, ClientInvoice, OwnerSubmission, OwnerSubmissionCategory, OwnerSubmissionInvoice, PendingContractor } from '../../types'
 
@@ -10,7 +17,7 @@ function pendingContractorLabel(contractor: PendingContractor): string {
     : `${contractor.name} (awaiting confirmation)`
 }
 
-const categories: OwnerSubmissionCategory[] = ['subscriptions', 'tips', 'livestreams']
+const categories: OwnerSubmissionCategory[] = ['subscriptions', 'tips', 'livestreams', 'paige_sexting', 'alex_sexting']
 
 function OwnerSubmissionCategoryTable({
   category,
@@ -246,28 +253,37 @@ export function OwnerSubmissionsTab({
       <div className="panel-head">
         <div>
           <h2>PM Sales</h2>
-          <p>{formatWeekRange(currentWeekStart, currentWeekEnd)} — log this week's Purchases, Tips and Customs per client.</p>
+          <p>
+            {formatWeekRange(currentWeekStart, currentWeekEnd)} — log this week's Purchases, Tips, Customs and Sexting per
+            client.
+          </p>
         </div>
       </div>
 
       {activeClients.length === 0 ? (
         <p className="info-text">No clients configured yet — add one from Teams, Clients & Sale Types.</p>
       ) : (
-        activeClients.map((client, index) => {
+        activeClients.map((client) => {
           const clientEntries = ownerSubmissions.filter((entry) => entry.client_id === client.id)
           const totalGross = clientEntries.reduce((sum, entry) => sum + entry.gross, 0)
           const totalNet = clientEntries.reduce((sum, entry) => sum + entry.net, 0)
-          const ownerSubmissionsCut = clientEntries.reduce((sum, entry) => sum + entry.owner_cut, 0)
+          const ownerSubmissionsCut = clientEntries
+            .filter((entry) => PPV_OWNER_SUBMISSION_CATEGORIES.includes(entry.category))
+            .reduce((sum, entry) => sum + entry.owner_cut, 0)
+          const sextingSubmissionsCut = clientEntries
+            .filter((entry) => SEXTING_OWNER_SUBMISSION_CATEGORIES.includes(entry.category))
+            .reduce((sum, entry) => sum + entry.owner_cut, 0)
           const existingInvoice = ownerSubmissionInvoices.find(
             (invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart,
           )
-          const clientInvoiceOwnerCut =
+          const contractorInvoiceOwnerCut =
             clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
               ?.owner_cut ?? 0
+          const sextingSalesAndCustomsCut = contractorInvoiceOwnerCut + sextingSubmissionsCut
           const pendingContractors = pendingContractorsForClient(client.id)
 
           return (
-            <div key={client.id} className={`entry-client entry-client-${index % 5}`}>
+            <div key={client.id} className="entry-client" style={clientColorVars(client.color)}>
               <h3>{client.name}</h3>
               {categories.map((category) => (
                 <OwnerSubmissionCategoryTable
@@ -291,12 +307,12 @@ export function OwnerSubmissionsTab({
                   <strong>{formatCurrency(totalNet)}</strong>
                 </div>
                 <div>
-                  <p className="label">Owner submissions cut</p>
+                  <p className="label">PPV Purchases &amp; Tips cut</p>
                   <strong>{formatCurrency(ownerSubmissionsCut)}</strong>
                 </div>
                 <div>
-                  <p className="label">Contractor invoice - owners cut</p>
-                  <strong>{formatCurrency(clientInvoiceOwnerCut)}</strong>
+                  <p className="label">Sexting Sales &amp; Customs cut</p>
+                  <strong>{formatCurrency(sextingSalesAndCustomsCut)}</strong>
                 </div>
                 <div>
                   <p className="label">Status</p>

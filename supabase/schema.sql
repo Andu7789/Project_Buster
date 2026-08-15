@@ -70,6 +70,27 @@ alter table buster_clients add column if not exists pm_sales_owner_percent numer
 alter table buster_clients add column if not exists sexting_owner_percent numeric not null default 20;
 alter table buster_clients add column if not exists customs_owner_percent numeric not null default 15;
 
+-- Migration: per-client color (hex accent), replacing the old scheme that
+-- auto-assigned a color from a client's position (index % 5) in the
+-- alphabetically-sorted client list - every client's color could shift
+-- whenever a new one was added earlier in the alphabet. Colors are now
+-- stored per client and never move once set. Backfill existing rows (only
+-- where color is still null, so this is safe to re-run without clobbering
+-- a color the owner has since picked) with the color their old alphabetical
+-- position would have produced, so nothing visually changes for existing
+-- clients; the app always sends an explicit color for new clients from here
+-- on, picked via the color picker in Team, Clients & Sale Types.
+alter table buster_clients add column if not exists color text;
+update buster_clients c
+set color = (array['#6673d1', '#e2823f', '#3fa866', '#c9599f', '#d0aa2b'])[(sub.position % 5) + 1]
+from (
+  select id, row_number() over (order by name asc) - 1 as position
+  from buster_clients
+) sub
+where c.id = sub.id and c.color is null;
+alter table buster_clients alter column color set default '#6673d1';
+alter table buster_clients alter column color set not null;
+
 -- The owner's own payout details for each method - a fixed set of 3 rows
 -- (seeded below, never inserted/deleted from the app, only updated in
 -- place). Owner-only end to end (no "anyone signed in reads" policy like
@@ -250,6 +271,19 @@ create table if not exists buster_owner_submission_invoices (
   created_at timestamptz not null default now(),
   unique (client_id, week_start)
 );
+
+-- Migration: two new owner-submission categories, "Paige sexting" and "Alex
+-- sexting" - the owner's own sexting-type entries, as opposed to the
+-- existing subscriptions/tips/livestreams (Purchases/Tips/Customs). Unlike
+-- those 3, these fold into the "Sexting Sales & Customs" invoice total
+-- alongside contractor buster_sale_entries, rather than "PPV Purchases &
+-- Tips" - see client_invoice_owner_cut usage in src/routes/OwnerDashboard.tsx.
+alter table buster_owner_submissions drop constraint if exists buster_owner_submissions_category_check;
+alter table buster_owner_submissions add constraint buster_owner_submissions_category_check
+  check (category in ('subscriptions', 'tips', 'livestreams', 'paige_sexting', 'alex_sexting'));
+
+alter table buster_owner_submission_invoices add column if not exists paige_sexting_owner_cut numeric not null default 0;
+alter table buster_owner_submission_invoices add column if not exists alex_sexting_owner_cut numeric not null default 0;
 
 -- Security-definer helper so RLS policies can check "is this caller an owner"
 -- without recursive-RLS problems (a policy on `buster_profiles` can't directly

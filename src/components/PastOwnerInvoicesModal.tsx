@@ -76,11 +76,11 @@ export function PastOwnerInvoicesModal({
 
         <div className="invoice-lines">
           <div className="invoice-line">
-            <span>Owner submissions cut</span>
+            <span>PPV Purchases &amp; Tips cut</span>
             <span>{formatCurrency(selected.owner_submissions_cut)}</span>
           </div>
           <div className="invoice-line">
-            <span>Client invoice owner cut</span>
+            <span>Sexting Sales &amp; Customs cut</span>
             <span>{formatCurrency(selected.client_invoice_owner_cut)}</span>
           </div>
           <div className="invoice-line invoice-line-total">

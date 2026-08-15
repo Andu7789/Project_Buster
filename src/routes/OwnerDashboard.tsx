@@ -38,6 +38,7 @@ import {
   updateClientNextInvoiceNumber,
   updateClientOwnerPercents,
   updateClientPayoutDetails,
+  updateOwnerSubmission,
   updatePaymentMethodDetails,
   updateWorkerShare,
 } from '../data/queries'
@@ -820,6 +821,14 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     setOwnerSubmissions((previous) => previous.filter((entry) => entry.id !== entryId))
   }
 
+  async function handleUpdateOwnerSubmission(
+    entryId: string,
+    input: { entryDate: string; buyerUsername: string; gross: number; ownerCutPercent: number },
+  ) {
+    const updated = await updateOwnerSubmission(entryId, input)
+    setOwnerSubmissions((previous) => previous.map((entry) => (entry.id === entryId ? updated : entry)))
+  }
+
   async function handleCreateOwnerSubmissionInvoice(client: Client): Promise<OwnerSubmissionInvoice> {
     const entries = ownerSubmissions.filter((entry) => entry.client_id === client.id)
     const cutFor = (category: OwnerSubmissionCategory) =>
@@ -1091,6 +1100,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               currentWeekEnd={currentWeekEnd}
               onAddOwnerSubmission={handleAddOwnerSubmission}
               onDeleteOwnerSubmission={handleDeleteOwnerSubmission}
+              onUpdateOwnerSubmission={handleUpdateOwnerSubmission}
               onOpenInvoice={(client) => setSelectedOwnerSubmissionClientId(client.id)}
               onOpenPastInvoices={(client) => setPastInvoicesClientId(client.id)}
               pendingContractorsForClient={pendingContractorsForClient}

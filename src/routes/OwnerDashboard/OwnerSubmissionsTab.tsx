@@ -25,6 +25,7 @@ function OwnerSubmissionCategoryTable({
   entries,
   onAdd,
   onDelete,
+  onUpdate,
 }: {
   category: OwnerSubmissionCategory
   client: Client
@@ -39,6 +40,7 @@ function OwnerSubmissionCategoryTable({
     ownerCutPercent?: number
   }) => Promise<void>
   onDelete: (entryId: string) => Promise<void>
+  onUpdate: (entryId: string, input: { entryDate: string; buyerUsername: string; gross: number; ownerCutPercent: number }) => Promise<void>
 }) {
   const defaultPercentDraft = String(client.pm_sales_owner_percent)
   const [entryDate, setEntryDate] = useState(() => toISODate(new Date()))
@@ -48,6 +50,12 @@ function OwnerSubmissionCategoryTable({
   const [percentDraft, setPercentDraft] = useState(defaultPercentDraft)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+  const [editDateDraft, setEditDateDraft] = useState('')
+  const [editUsernameDraft, setEditUsernameDraft] = useState('')
+  const [editGrossDraft, setEditGrossDraft] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   const grossValue = Number(grossDraft)
   const hasValidGross = grossDraft.trim() !== '' && Number.isFinite(grossValue) && grossValue >= 0
@@ -106,6 +114,51 @@ function OwnerSubmissionCategoryTable({
     }
   }
 
+  function startEdit(entry: OwnerSubmission) {
+    setError(null)
+    setEditingEntryId(entry.id)
+    setEditDateDraft(entry.entry_date)
+    setEditUsernameDraft(entry.buyer_username)
+    setEditGrossDraft(String(entry.gross))
+  }
+
+  function cancelEdit() {
+    setEditingEntryId(null)
+  }
+
+  async function saveEdit(entry: OwnerSubmission) {
+    setError(null)
+    if (!editDateDraft) {
+      setError('Choose a valid date.')
+      return
+    }
+    if (!editUsernameDraft.trim()) {
+      setError('Enter a username.')
+      return
+    }
+    const editGrossValue = Number(editGrossDraft)
+    if (!(editGrossDraft.trim() !== '' && Number.isFinite(editGrossValue) && editGrossValue >= 0)) {
+      setError('Enter a valid amount.')
+      return
+    }
+    // Preserve whichever owner-cut % this entry was saved with (default or overridden) - this edit only touches date/username/amount.
+    const effectivePercent = entry.net > 0 ? (entry.owner_cut / entry.net) * 100 : client.pm_sales_owner_percent
+    setEditSaving(true)
+    try {
+      await onUpdate(entry.id, {
+        entryDate: editDateDraft,
+        buyerUsername: editUsernameDraft,
+        gross: editGrossValue,
+        ownerCutPercent: effectivePercent,
+      })
+      setEditingEntryId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update this entry.')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   return (
     <div className="entry-section">
       <h4>{ownerSubmissionCategoryLabel[category]}</h4>
@@ -124,15 +177,65 @@ function OwnerSubmissionCategoryTable({
           <tbody>
             {entries.map((entry) => (
               <tr key={entry.id}>
-                <td>{entry.entry_date}</td>
-                <td>{entry.buyer_username}</td>
-                <td>{formatCurrency(entry.gross)}</td>
+                <td>
+                  {editingEntryId === entry.id ? (
+                    <input
+                      type="date"
+                      className="gross-input"
+                      value={editDateDraft}
+                      onChange={(event) => setEditDateDraft(event.target.value)}
+                      autoFocus
+                    />
+                  ) : (
+                    entry.entry_date
+                  )}
+                </td>
+                <td>
+                  {editingEntryId === entry.id ? (
+                    <input
+                      value={editUsernameDraft}
+                      onChange={(event) => setEditUsernameDraft(event.target.value)}
+                    />
+                  ) : (
+                    entry.buyer_username
+                  )}
+                </td>
+                <td>
+                  {editingEntryId === entry.id ? (
+                    <input
+                      type="number"
+                      className="gross-input"
+                      min="0"
+                      step="0.01"
+                      value={editGrossDraft}
+                      onChange={(event) => setEditGrossDraft(event.target.value)}
+                    />
+                  ) : (
+                    formatCurrency(entry.gross)
+                  )}
+                </td>
                 <td>{formatCurrency(entry.net)}</td>
                 <td>{formatCurrency(entry.owner_cut)}</td>
                 <td>
-                  <button type="button" className="link-btn" onClick={() => handleDelete(entry.id)}>
-                    Remove
-                  </button>
+                  {editingEntryId === entry.id ? (
+                    <>
+                      <button type="button" className="link-btn" onClick={() => saveEdit(entry)} disabled={editSaving}>
+                        {editSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button type="button" className="link-btn" onClick={cancelEdit} disabled={editSaving}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="link-btn" onClick={() => startEdit(entry)}>
+                        Edit
+                      </button>
+                      <button type="button" className="link-btn" onClick={() => handleDelete(entry.id)}>
+                        Remove
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
@@ -224,6 +327,7 @@ export function OwnerSubmissionsTab({
   currentWeekEnd,
   onAddOwnerSubmission,
   onDeleteOwnerSubmission,
+  onUpdateOwnerSubmission,
   onOpenInvoice,
   onOpenPastInvoices,
   pendingContractorsForClient,
@@ -244,6 +348,10 @@ export function OwnerSubmissionsTab({
     ownerCutPercent?: number
   }) => Promise<void>
   onDeleteOwnerSubmission: (entryId: string) => Promise<void>
+  onUpdateOwnerSubmission: (
+    entryId: string,
+    input: { entryDate: string; buyerUsername: string; gross: number; ownerCutPercent: number },
+  ) => Promise<void>
   onOpenInvoice: (client: Client) => void
   onOpenPastInvoices: (client: Client) => void
   pendingContractorsForClient: (clientId: string) => PendingContractor[]
@@ -293,6 +401,7 @@ export function OwnerSubmissionsTab({
                   entries={clientEntries.filter((entry) => entry.category === category)}
                   onAdd={onAddOwnerSubmission}
                   onDelete={onDeleteOwnerSubmission}
+                  onUpdate={onUpdateOwnerSubmission}
                 />
               ))}
 

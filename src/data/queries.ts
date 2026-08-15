@@ -708,6 +708,31 @@ export async function addOwnerSubmission(input: {
   return data as OwnerSubmission
 }
 
+export async function updateOwnerSubmission(
+  submissionId: string,
+  input: { entryDate: string; buyerUsername: string; gross: number; ownerCutPercent: number },
+): Promise<OwnerSubmission> {
+  const client = requireClient()
+  const net = calcNet(input.gross)
+  const ownerCut = calcOwnerSubmissionCut(net, input.ownerCutPercent)
+
+  const { data, error } = await client
+    .from('buster_owner_submissions')
+    .update({
+      entry_date: input.entryDate,
+      buyer_username: input.buyerUsername.trim(),
+      gross: input.gross,
+      net,
+      owner_cut: ownerCut,
+    })
+    .eq('id', submissionId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as OwnerSubmission
+}
+
 export async function deleteOwnerSubmission(submissionId: string): Promise<void> {
   const client = requireClient()
   const { error } = await client.from('buster_owner_submissions').delete().eq('id', submissionId)

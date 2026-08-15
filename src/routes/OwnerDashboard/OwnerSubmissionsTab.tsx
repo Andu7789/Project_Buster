@@ -218,23 +218,23 @@ function OwnerSubmissionCategoryTable({
                 <td>{formatCurrency(entry.owner_cut)}</td>
                 <td>
                   {editingEntryId === entry.id ? (
-                    <>
-                      <button type="button" className="link-btn" onClick={() => saveEdit(entry)} disabled={editSaving}>
+                    <div className="roster-actions">
+                      <button type="button" className="btn-outline" onClick={() => saveEdit(entry)} disabled={editSaving}>
                         {editSaving ? 'Saving…' : 'Save'}
                       </button>
-                      <button type="button" className="link-btn" onClick={cancelEdit} disabled={editSaving}>
+                      <button type="button" className="btn-outline" onClick={cancelEdit} disabled={editSaving}>
                         Cancel
                       </button>
-                    </>
+                    </div>
                   ) : (
-                    <>
-                      <button type="button" className="link-btn" onClick={() => startEdit(entry)}>
+                    <div className="roster-actions">
+                      <button type="button" className="btn-outline" onClick={() => startEdit(entry)}>
                         Edit
                       </button>
-                      <button type="button" className="link-btn" onClick={() => handleDelete(entry.id)}>
+                      <button type="button" className="btn-danger" onClick={() => handleDelete(entry.id)}>
                         Remove
                       </button>
-                    </>
+                    </div>
                   )}
                 </td>
               </tr>

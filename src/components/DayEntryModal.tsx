@@ -7,6 +7,12 @@ import type { Client, SaleEntry, SaleSection, SaleType } from '../types'
 
 const sections: SaleSection[] = ['sexting', 'customs']
 
+// Contractors see friendlier wording on their own entry form; other views (invoices, dashboards) keep the "Sexting" label.
+const entryFormSectionLabel: Record<SaleSection, string> = {
+  ...sectionLabel,
+  sexting: 'Purchases and Tips',
+}
+
 function ClientSection({
   client,
   section,
@@ -88,7 +94,7 @@ function ClientSection({
 
   return (
     <div className="entry-section">
-      <h4>{sectionLabel[section]}</h4>
+      <h4>{entryFormSectionLabel[section]}</h4>
       <div className="table-wrapper">
         <table className="detail-table">
           <thead>

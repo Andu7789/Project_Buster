@@ -114,8 +114,8 @@ export function OwnerSubmissionInvoiceModal({
         </p>
 
         <p className="info-text">
-          This invoice combines this week's owner submissions with the client invoice owner cut, but not every
-          contractor who logged work for {clientName} this week has submitted their timesheet and been confirmed as
+          This invoice combines {weekLabel}'s owner submissions with the client invoice owner cut, but not every
+          contractor who logged work for {clientName} that week has submitted their timesheet and been confirmed as
           checked yet:
         </p>
 
@@ -264,7 +264,7 @@ export function OwnerSubmissionInvoiceModal({
 
       {!hasClientInvoice && (
         <p className="message message-info">
-          No client invoice has been created yet for this week — the Sexting Sales &amp; Customs cut above won't
+          No client invoice has been created yet for {weekLabel} — the Sexting Sales &amp; Customs cut above won't
           include the contractor portion until one is created from the Submissions &amp; Invoices tab.
         </p>
       )}
@@ -272,7 +272,7 @@ export function OwnerSubmissionInvoiceModal({
       {!invoice && pendingContractors.length > 0 && (
         <p className="message message-error">
           Not all contractors are finalized yet — {pendingContractors.length === 1 ? 'one contractor' : `${pendingContractors.length} contractors`} who
-          logged work for {clientName} this week still need to submit and be confirmed as checked.
+          logged work for {clientName} that week still need to submit and be confirmed as checked.
         </p>
       )}
 

@@ -1195,8 +1195,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       {selectedOwnerSubmissionClient && (
         <OwnerSubmissionInvoiceModal
           clientName={selectedOwnerSubmissionClient.name}
-          weekStart={currentWeekStart}
-          weekEnd={currentWeekEnd}
+          weekStart={ownerSubmissionsWeekStart}
+          weekEnd={ownerSubmissionsWeekEnd}
           subscriptionsOwnerCut={selectedOwnerSubmissionsCutBySection.subscriptions}
           tipsOwnerCut={selectedOwnerSubmissionsCutBySection.tips}
           livestreamsOwnerCut={selectedOwnerSubmissionsCutBySection.livestreams}

@@ -23,6 +23,8 @@ function OwnerSubmissionCategoryTable({
   category,
   client,
   entries,
+  weekStart,
+  weekEnd,
   onAdd,
   onDelete,
   onUpdate,
@@ -30,6 +32,8 @@ function OwnerSubmissionCategoryTable({
   category: OwnerSubmissionCategory
   client: Client
   entries: OwnerSubmission[]
+  weekStart: string
+  weekEnd: string
   onAdd: (input: {
     category: OwnerSubmissionCategory
     clientId: string
@@ -43,7 +47,10 @@ function OwnerSubmissionCategoryTable({
   onUpdate: (entryId: string, input: { entryDate: string; buyerUsername: string; gross: number; ownerCutPercent: number }) => Promise<void>
 }) {
   const defaultPercentDraft = String(client.pm_sales_owner_percent)
-  const [entryDate, setEntryDate] = useState(() => toISODate(new Date()))
+  const [entryDate, setEntryDate] = useState(() => {
+    const today = toISODate(new Date())
+    return today >= weekStart && today <= weekEnd ? today : weekStart
+  })
   const [buyerUsername, setBuyerUsername] = useState('')
   const [grossDraft, setGrossDraft] = useState('')
   const [overridePercent, setOverridePercent] = useState(false)
@@ -183,6 +190,8 @@ function OwnerSubmissionCategoryTable({
                       type="date"
                       className="gross-input"
                       value={editDateDraft}
+                      min={weekStart}
+                      max={weekEnd}
                       onChange={(event) => setEditDateDraft(event.target.value)}
                       autoFocus
                     />
@@ -265,7 +274,13 @@ function OwnerSubmissionCategoryTable({
           handleAdd()
         }}
       >
-        <input type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} />
+        <input
+          type="date"
+          value={entryDate}
+          min={weekStart}
+          max={weekEnd}
+          onChange={(event) => setEntryDate(event.target.value)}
+        />
         <input
           type="text"
           className="gross-input"
@@ -323,8 +338,12 @@ export function OwnerSubmissionsTab({
   ownerSubmissions,
   ownerSubmissionInvoices,
   clientInvoices,
-  currentWeekStart,
-  currentWeekEnd,
+  weekStart,
+  weekEnd,
+  isCurrentWeek,
+  onPreviousWeek,
+  onNextWeek,
+  onJumpToCurrentWeek,
   onAddOwnerSubmission,
   onDeleteOwnerSubmission,
   onUpdateOwnerSubmission,
@@ -336,8 +355,12 @@ export function OwnerSubmissionsTab({
   ownerSubmissions: OwnerSubmission[]
   ownerSubmissionInvoices: OwnerSubmissionInvoice[]
   clientInvoices: ClientInvoice[]
-  currentWeekStart: string
-  currentWeekEnd: string
+  weekStart: string
+  weekEnd: string
+  isCurrentWeek: boolean
+  onPreviousWeek: () => void
+  onNextWeek: () => void
+  onJumpToCurrentWeek: () => void
   onAddOwnerSubmission: (input: {
     category: OwnerSubmissionCategory
     clientId: string
@@ -362,9 +385,24 @@ export function OwnerSubmissionsTab({
         <div>
           <h2>PM Sales</h2>
           <p>
-            {formatWeekRange(currentWeekStart, currentWeekEnd)} — log this week's Purchases, Tips, Customs and Sexting per
-            client.
+            {formatWeekRange(weekStart, weekEnd)} —{' '}
+            {isCurrentWeek
+              ? "log this week's Purchases, Tips, Customs and Sexting per client."
+              : 'editing a past week — add or remove entries as needed.'}
           </p>
+        </div>
+        <div className="roster-actions">
+          <button type="button" className="btn-outline" onClick={onPreviousWeek}>
+            ← Previous week
+          </button>
+          {!isCurrentWeek && (
+            <button type="button" className="btn-outline" onClick={onJumpToCurrentWeek}>
+              Current week
+            </button>
+          )}
+          <button type="button" className="btn-outline" onClick={onNextWeek} disabled={isCurrentWeek}>
+            Next week →
+          </button>
         </div>
       </div>
 
@@ -382,10 +420,10 @@ export function OwnerSubmissionsTab({
             .filter((entry) => SEXTING_OWNER_SUBMISSION_CATEGORIES.includes(entry.category))
             .reduce((sum, entry) => sum + entry.owner_cut, 0)
           const existingInvoice = ownerSubmissionInvoices.find(
-            (invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart,
+            (invoice) => invoice.client_id === client.id && invoice.week_start === weekStart,
           )
           const contractorInvoiceOwnerCut =
-            clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
+            clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === weekStart)
               ?.owner_cut ?? 0
           const sextingSalesAndCustomsCut = contractorInvoiceOwnerCut + sextingSubmissionsCut
           const pendingContractors = pendingContractorsForClient(client.id)
@@ -395,17 +433,21 @@ export function OwnerSubmissionsTab({
               <h3>{client.name}</h3>
               {categories.map((category) => (
                 <OwnerSubmissionCategoryTable
-                  key={category}
+                  key={`${category}-${weekStart}`}
                   category={category}
                   client={client}
                   entries={clientEntries.filter((entry) => entry.category === category)}
+                  weekStart={weekStart}
+                  weekEnd={weekEnd}
                   onAdd={onAddOwnerSubmission}
                   onDelete={onDeleteOwnerSubmission}
                   onUpdate={onUpdateOwnerSubmission}
                 />
               ))}
 
-              <h4 className="detail-summary-heading">{client.name} totals this week</h4>
+              <h4 className="detail-summary-heading">
+                {client.name} totals {isCurrentWeek ? 'this week' : `for ${formatWeekRange(weekStart, weekEnd)}`}
+              </h4>
               <div className="detail-summary">
                 <div>
                   <p className="label">Gross</p>

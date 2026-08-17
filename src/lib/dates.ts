@@ -42,6 +42,15 @@ export function getPreviousWeekRange(weekStart: string): { weekStart: string; we
   return { weekStart: toISODate(monday), weekEnd: toISODate(sunday) }
 }
 
+/** Returns the Monday-Sunday range immediately after the week starting on `weekStart`. */
+export function getNextWeekRange(weekStart: string): { weekStart: string; weekEnd: string } {
+  const monday = new Date(weekStart)
+  monday.setDate(monday.getDate() + 7)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  return { weekStart: toISODate(monday), weekEnd: toISODate(sunday) }
+}
+
 /** Grace window (Monday-Wednesday) during which last week's earnings can still be logged/submitted. */
 export function isWithinGracePeriod(reference: Date = new Date()): boolean {
   const dayIndex = (reference.getDay() + 6) % 7 // 0 = Monday ... 6 = Sunday

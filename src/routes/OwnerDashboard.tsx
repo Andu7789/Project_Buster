@@ -42,7 +42,7 @@ import {
   updatePaymentMethodDetails,
   updateWorkerShare,
 } from '../data/queries'
-import { formatCurrency, getCurrentWeekRange, toISODate } from '../lib/dates'
+import { formatCurrency, getCurrentWeekRange, getNextWeekRange, getPreviousWeekRange, toISODate } from '../lib/dates'
 import {
   calcOwnerCut,
   clientPayoutTotal,
@@ -108,6 +108,10 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   const { weekStart: currentWeekStart, weekEnd: currentWeekEnd } = useMemo(() => getCurrentWeekRange(), [])
 
+  const [ownerSubmissionsWeekStart, setOwnerSubmissionsWeekStart] = useState(currentWeekStart)
+  const [ownerSubmissionsWeekEnd, setOwnerSubmissionsWeekEnd] = useState(currentWeekEnd)
+  const [ownerSubmissionsWeekSaleEntries, setOwnerSubmissionsWeekSaleEntries] = useState<SaleEntry[]>([])
+
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
   const [viewedInvoiceId, setViewedInvoiceId] = useState<string | null>(null)
@@ -171,7 +175,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       listClientInvoices(),
       listLearners(),
       listAllTrainingProgress(),
-      listOwnerSubmissionsForRange(currentWeekStart, currentWeekEnd),
       listOwnerSubmissionInvoices(),
       listOwners(),
       listPaymentMethods(),
@@ -186,7 +189,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           clientInvoiceData,
           learnerData,
           progressData,
-          ownerSubmissionData,
           ownerSubmissionInvoiceData,
           ownerData,
           paymentMethodData,
@@ -201,7 +203,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setClientInvoices(clientInvoiceData)
           setLearners(learnerData)
           setTrainingProgress(progressData)
-          setOwnerSubmissions(ownerSubmissionData)
           setOwnerSubmissionInvoices(ownerSubmissionInvoiceData)
           setOwners(ownerData)
           setPaymentMethods(paymentMethodData)
@@ -218,6 +219,25 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       cancelled = true
     }
   }, [currentWeekStart, currentWeekEnd])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      listOwnerSubmissionsForRange(ownerSubmissionsWeekStart, ownerSubmissionsWeekEnd),
+      listSaleEntriesForWeek(ownerSubmissionsWeekStart, ownerSubmissionsWeekEnd),
+    ])
+      .then(([ownerSubmissionData, saleEntryData]) => {
+        if (cancelled) return
+        setOwnerSubmissions(ownerSubmissionData)
+        setOwnerSubmissionsWeekSaleEntries(saleEntryData)
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load PM Sales entries.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ownerSubmissionsWeekStart, ownerSubmissionsWeekEnd])
 
   const activeWorkers = workers.filter((worker) => worker.status === 'active').length
   const pendingInvites = workers.filter((worker) => worker.status === 'pending').length
@@ -288,7 +308,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     selectedOwnerSubmissionsCutBySection.livestreams
   const selectedOwnerSubmissionClientInvoice = selectedOwnerSubmissionClientId
     ? clientInvoices.find(
-        (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === currentWeekStart,
+        (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === ownerSubmissionsWeekStart,
       ) ?? null
     : null
   const selectedSextingSalesAndCustomsCut =
@@ -297,7 +317,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     selectedOwnerSubmissionsCutBySection.alexSexting
   const selectedOwnerSubmissionInvoice = selectedOwnerSubmissionClientId
     ? ownerSubmissionInvoices.find(
-        (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === currentWeekStart,
+        (invoice) => invoice.client_id === selectedOwnerSubmissionClientId && invoice.week_start === ownerSubmissionsWeekStart,
       ) ?? null
     : null
 
@@ -307,19 +327,21 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     : []
 
   /**
-   * Workers who logged sale entries for this client this week but whose figures for that
-   * client aren't finalized yet - either they haven't submitted their weekly timesheet at
-   * all, or they've submitted but the owner hasn't confirmed it as checked. The owner invoice
-   * (which combines the client-invoice owner cut with this week's owner submissions) isn't
-   * final until every one of them is submitted and confirmed.
+   * Workers who logged sale entries for this client in the currently viewed PM Sales week but
+   * whose figures for that client aren't finalized yet - either they haven't submitted their
+   * weekly timesheet at all, or they've submitted but the owner hasn't confirmed it as checked.
+   * The owner invoice (which combines the client-invoice owner cut with that week's owner
+   * submissions) isn't final until every one of them is submitted and confirmed. This checks
+   * whichever week is being viewed/invoiced in PM Sales - typically last week, since the owner
+   * usually invoices on the Monday/Tuesday after it, once PM Sales has rolled over to a new week.
    */
   function pendingContractorsForClient(clientId: string): PendingContractor[] {
     const workerIds = new Set(
-      weekEntries.filter((entry) => entry.client_id === clientId).map((entry) => entry.worker_id),
+      ownerSubmissionsWeekSaleEntries.filter((entry) => entry.client_id === clientId).map((entry) => entry.worker_id),
     )
     return Array.from(workerIds).flatMap((workerId): PendingContractor[] => {
       const name = workers.find((w) => w.id === workerId)?.full_name ?? 'Unknown worker'
-      const submission = submissions.find((s) => s.worker_id === workerId && s.week_start === currentWeekStart)
+      const submission = submissions.find((s) => s.worker_id === workerId && s.week_start === ownerSubmissionsWeekStart)
       if (!submission) return [{ name, status: 'not_submitted' }]
       if (!submission.dealt_with) return [{ name, status: 'awaiting_confirmation' }]
       return []
@@ -843,14 +865,14 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     // "Sexting Sales & Customs" alongside the contractor entries below, not here.
     const ownerSubmissionsCut = subscriptionsOwnerCut + tipsOwnerCut + livestreamsOwnerCut
     const contractorInvoiceOwnerCut =
-      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
+      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart)
         ?.owner_cut ?? 0
     const clientInvoiceOwnerCut = contractorInvoiceOwnerCut + paigeSextingOwnerCut + alexSextingOwnerCut
 
     const created = await createOwnerSubmissionInvoice({
       clientId: client.id,
-      weekStart: currentWeekStart,
-      weekEnd: currentWeekEnd,
+      weekStart: ownerSubmissionsWeekStart,
+      weekEnd: ownerSubmissionsWeekEnd,
       subscriptionsOwnerCut,
       tipsOwnerCut,
       livestreamsOwnerCut,
@@ -878,7 +900,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   async function handleDownloadOwnerInvoicePdf(client: Client) {
     const contractorInvoiceOwnerCut =
-      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart)
+      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart)
         ?.owner_cut ?? 0
     const clientOwnerSubmissions = ownerSubmissions.filter((entry) => entry.client_id === client.id)
     // Paid/Alex sexting fold into "Sexting Sales & Customs" (with the contractor cut above and
@@ -899,7 +921,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       return
     }
 
-    const dueDate = new Date(currentWeekStart)
+    const dueDate = new Date(ownerSubmissionsWeekStart)
     dueDate.setDate(dueDate.getDate() + 2) // weeks start Monday - invoices are due the Wednesday of the same week
 
     const method = client.payment_method
@@ -913,12 +935,12 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
     await generateOwnerInvoicePdf({
       clientName: client.real_name?.trim() || client.name,
-      weekStart: currentWeekStart,
-      weekEnd: currentWeekEnd,
+      weekStart: ownerSubmissionsWeekStart,
+      weekEnd: ownerSubmissionsWeekEnd,
       ownerSubmissionsCut,
       clientInvoiceOwnerCut,
       combinedOwnerCut: ownerSubmissionsCut + clientInvoiceOwnerCut,
-      saleEntries: weekEntries.filter((entry) => entry.client_id === client.id),
+      saleEntries: ownerSubmissionsWeekSaleEntries.filter((entry) => entry.client_id === client.id),
       saleTypes,
       sextingOwnerPercent: client.sexting_owner_percent,
       customsOwnerPercent: client.customs_owner_percent,
@@ -1096,8 +1118,23 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               ownerSubmissions={ownerSubmissions}
               ownerSubmissionInvoices={ownerSubmissionInvoices}
               clientInvoices={clientInvoices}
-              currentWeekStart={currentWeekStart}
-              currentWeekEnd={currentWeekEnd}
+              weekStart={ownerSubmissionsWeekStart}
+              weekEnd={ownerSubmissionsWeekEnd}
+              isCurrentWeek={ownerSubmissionsWeekStart === currentWeekStart}
+              onPreviousWeek={() => {
+                const range = getPreviousWeekRange(ownerSubmissionsWeekStart)
+                setOwnerSubmissionsWeekStart(range.weekStart)
+                setOwnerSubmissionsWeekEnd(range.weekEnd)
+              }}
+              onNextWeek={() => {
+                const range = getNextWeekRange(ownerSubmissionsWeekStart)
+                setOwnerSubmissionsWeekStart(range.weekStart)
+                setOwnerSubmissionsWeekEnd(range.weekEnd)
+              }}
+              onJumpToCurrentWeek={() => {
+                setOwnerSubmissionsWeekStart(currentWeekStart)
+                setOwnerSubmissionsWeekEnd(currentWeekEnd)
+              }}
               onAddOwnerSubmission={handleAddOwnerSubmission}
               onDeleteOwnerSubmission={handleDeleteOwnerSubmission}
               onUpdateOwnerSubmission={handleUpdateOwnerSubmission}

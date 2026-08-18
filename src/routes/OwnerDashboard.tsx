@@ -330,6 +330,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     : null
   const selectedSextingSalesAndCustomsCut =
     (selectedOwnerSubmissionClientInvoice?.owner_cut ?? 0) +
+    (selectedOwnerSubmissionClientInvoice?.worker_cut ?? 0) +
     selectedOwnerSubmissionsCutBySection.paigeSexting +
     selectedOwnerSubmissionsCutBySection.alexSexting
   const selectedOwnerSubmissionInvoice = selectedOwnerSubmissionClientId
@@ -881,9 +882,12 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     // Purchases/Tips/Customs make up "PPV Purchases & Tips"; Paige/Alex sexting fold into
     // "Sexting Sales & Customs" alongside the contractor entries below, not here.
     const ownerSubmissionsCut = subscriptionsOwnerCut + tipsOwnerCut + livestreamsOwnerCut
-    const contractorInvoiceOwnerCut =
-      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart)
-        ?.owner_cut ?? 0
+    const contractorInvoice = clientInvoices.find(
+      (invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart,
+    )
+    // The client is invoiced for the full amount deducted from her earnings that week - both the
+    // worker cut (which gets paid out to contractors) and the owner cut - not just the owner's cut.
+    const contractorInvoiceOwnerCut = (contractorInvoice?.owner_cut ?? 0) + (contractorInvoice?.worker_cut ?? 0)
     const clientInvoiceOwnerCut = contractorInvoiceOwnerCut + paigeSextingOwnerCut + alexSextingOwnerCut
 
     const created = await createOwnerSubmissionInvoice({
@@ -916,9 +920,10 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   }
 
   async function handleDownloadOwnerInvoicePdf(client: Client) {
-    const contractorInvoiceOwnerCut =
-      clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart)
-        ?.owner_cut ?? 0
+    const contractorInvoiceForPdf = clientInvoices.find(
+      (invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart,
+    )
+    const contractorInvoiceOwnerCut = (contractorInvoiceForPdf?.owner_cut ?? 0) + (contractorInvoiceForPdf?.worker_cut ?? 0)
     const clientOwnerSubmissions = ownerSubmissions.filter((entry) => entry.client_id === client.id)
     // Paid/Alex sexting fold into "Sexting Sales & Customs" (with the contractor cut above and
     // page-two PDF entries) rather than "PPV Purchases & Tips" - see PPV_OWNER_SUBMISSION_CATEGORIES.

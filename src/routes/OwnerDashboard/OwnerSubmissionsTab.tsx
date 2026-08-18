@@ -422,9 +422,12 @@ export function OwnerSubmissionsTab({
           const existingInvoice = ownerSubmissionInvoices.find(
             (invoice) => invoice.client_id === client.id && invoice.week_start === weekStart,
           )
-          const contractorInvoiceOwnerCut =
-            clientInvoices.find((invoice) => invoice.client_id === client.id && invoice.week_start === weekStart)
-              ?.owner_cut ?? 0
+          const contractorInvoice = clientInvoices.find(
+            (invoice) => invoice.client_id === client.id && invoice.week_start === weekStart,
+          )
+          // The client is invoiced for the full amount deducted from her earnings that week -
+          // both the worker cut (paid out to contractors) and the owner cut, not just the owner's.
+          const contractorInvoiceOwnerCut = (contractorInvoice?.owner_cut ?? 0) + (contractorInvoice?.worker_cut ?? 0)
           const sextingSalesAndCustomsCut = contractorInvoiceOwnerCut + sextingSubmissionsCut
           const pendingContractors = pendingContractorsForClient(client.id)
 

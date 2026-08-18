@@ -18,7 +18,12 @@ export function SubmissionsInvoicesTab({
   clients,
   weekEntries,
   clientInvoices,
-  currentWeekStart,
+  weekStart,
+  weekEnd,
+  isCurrentWeek,
+  onPreviousWeek,
+  onNextWeek,
+  onJumpToCurrentWeek,
   selectedClientId,
   onSelectClient,
   onViewInvoice,
@@ -34,7 +39,12 @@ export function SubmissionsInvoicesTab({
   clients: Client[]
   weekEntries: SaleEntry[]
   clientInvoices: ClientInvoice[]
-  currentWeekStart: string
+  weekStart: string
+  weekEnd: string
+  isCurrentWeek: boolean
+  onPreviousWeek: () => void
+  onNextWeek: () => void
+  onJumpToCurrentWeek: () => void
   selectedClientId: string | null
   onSelectClient: (clientId: string) => void
   onViewInvoice: (invoiceId: string) => void
@@ -122,7 +132,24 @@ export function SubmissionsInvoicesTab({
         <div className="panel-head">
           <div>
             <h2>Client invoices</h2>
-            <p>This week's sales per client — check the figures and confirm.</p>
+            <p>
+              {isCurrentWeek
+                ? "This week's sales per client — check the figures and confirm."
+                : `${formatWeekRange(weekStart, weekEnd)}'s sales per client — check the figures and confirm.`}
+            </p>
+          </div>
+          <div className="roster-actions">
+            <button type="button" className="btn-outline" onClick={onPreviousWeek}>
+              ← Previous week
+            </button>
+            {!isCurrentWeek && (
+              <button type="button" className="btn-outline" onClick={onJumpToCurrentWeek}>
+                Current week
+              </button>
+            )}
+            <button type="button" className="btn-outline" onClick={onNextWeek} disabled={isCurrentWeek}>
+              Next week →
+            </button>
           </div>
         </div>
 
@@ -130,7 +157,7 @@ export function SubmissionsInvoicesTab({
           {activeClients.map((client, index) => {
             const entries = weekEntries.filter((entry) => entry.client_id === client.id)
             const invoice = clientInvoices.find(
-              (inv) => inv.client_id === client.id && inv.week_start === currentWeekStart,
+              (inv) => inv.client_id === client.id && inv.week_start === weekStart,
             )
             return (
               <HoverEffectItem key={client.id} index={index}>

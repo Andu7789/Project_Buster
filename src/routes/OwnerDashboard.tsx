@@ -96,7 +96,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
-  const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
   const [clientInvoices, setClientInvoices] = useState<ClientInvoice[]>([])
   const [ownerSubmissions, setOwnerSubmissions] = useState<OwnerSubmission[]>([])
   const [ownerSubmissionInvoices, setOwnerSubmissionInvoices] = useState<OwnerSubmissionInvoice[]>([])
@@ -108,9 +107,28 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   const { weekStart: currentWeekStart, weekEnd: currentWeekEnd } = useMemo(() => getCurrentWeekRange(), [])
 
+  // The week the owner is currently reviewing/invoicing from - shared between the "Client
+  // invoices" section of Submissions & Invoices and the PM Sales tab, since invoicing normally
+  // happens on the Monday/Tuesday after a week ends (once PM Sales has already rolled over to
+  // the new week), and both tabs need to be looking at the same past week to reconcile it.
   const [ownerSubmissionsWeekStart, setOwnerSubmissionsWeekStart] = useState(currentWeekStart)
   const [ownerSubmissionsWeekEnd, setOwnerSubmissionsWeekEnd] = useState(currentWeekEnd)
   const [ownerSubmissionsWeekSaleEntries, setOwnerSubmissionsWeekSaleEntries] = useState<SaleEntry[]>([])
+
+  function goToPreviousOwnerInvoicingWeek() {
+    const range = getPreviousWeekRange(ownerSubmissionsWeekStart)
+    setOwnerSubmissionsWeekStart(range.weekStart)
+    setOwnerSubmissionsWeekEnd(range.weekEnd)
+  }
+  function goToNextOwnerInvoicingWeek() {
+    const range = getNextWeekRange(ownerSubmissionsWeekStart)
+    setOwnerSubmissionsWeekStart(range.weekStart)
+    setOwnerSubmissionsWeekEnd(range.weekEnd)
+  }
+  function goToCurrentOwnerInvoicingWeek() {
+    setOwnerSubmissionsWeekStart(currentWeekStart)
+    setOwnerSubmissionsWeekEnd(currentWeekEnd)
+  }
 
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
   const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
@@ -171,7 +189,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       listAllSubmissions(),
       listClients(),
       listSaleTypes(),
-      listSaleEntriesForWeek(currentWeekStart, currentWeekEnd),
       listClientInvoices(),
       listLearners(),
       listAllTrainingProgress(),
@@ -185,7 +202,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           submissionData,
           clientData,
           saleTypeData,
-          weekEntryData,
           clientInvoiceData,
           learnerData,
           progressData,
@@ -199,7 +215,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setClients(clientData)
           setNewClientColor(nextClientColor(clientData.map((client) => client.color)))
           setSaleTypes(saleTypeData)
-          setWeekEntries(weekEntryData)
           setClientInvoices(clientInvoiceData)
           setLearners(learnerData)
           setTrainingProgress(progressData)
@@ -273,9 +288,11 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   const activeClients = clients.filter((client) => client.active)
   const selectedClient = clients.find((client) => client.id === selectedClientId) ?? null
-  const selectedClientEntries = selectedClientId ? weekEntries.filter((entry) => entry.client_id === selectedClientId) : []
+  const selectedClientEntries = selectedClientId
+    ? ownerSubmissionsWeekSaleEntries.filter((entry) => entry.client_id === selectedClientId)
+    : []
   const selectedClientInvoice = selectedClientId
-    ? clientInvoices.find((invoice) => invoice.client_id === selectedClientId && invoice.week_start === currentWeekStart) ?? null
+    ? clientInvoices.find((invoice) => invoice.client_id === selectedClientId && invoice.week_start === ownerSubmissionsWeekStart) ?? null
     : null
 
   const viewedInvoice = clientInvoices.find((invoice) => invoice.id === viewedInvoiceId) ?? null
@@ -768,7 +785,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     await deleteSubmission(submissionId)
     setSubmissions((previous) => previous.filter((entry) => entry.id !== submissionId))
     if (submission) {
-      setWeekEntries((previous) =>
+      setOwnerSubmissionsWeekSaleEntries((previous) =>
         previous.filter(
           (entry) =>
             !(
@@ -782,14 +799,14 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   }
 
   async function handleCreateClientInvoice(client: Client): Promise<ClientInvoice> {
-    const entries = weekEntries.filter((entry) => entry.client_id === client.id)
+    const entries = ownerSubmissionsWeekSaleEntries.filter((entry) => entry.client_id === client.id)
     const netBySection: Record<SaleSection, number> = { sexting: 0, customs: 0 }
     for (const entry of entries) netBySection[entry.section] += entry.net
 
     const created = await createClientInvoice({
       clientId: client.id,
-      weekStart: currentWeekStart,
-      weekEnd: currentWeekEnd,
+      weekStart: ownerSubmissionsWeekStart,
+      weekEnd: ownerSubmissionsWeekEnd,
       sextingNet: netBySection.sexting,
       customsNet: netBySection.customs,
       workerCut: entries.reduce((sum, entry) => sum + entry.earnings, 0),
@@ -812,7 +829,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
   async function handleConfirmClientInvoice(client: Client): Promise<ClientInvoice> {
     const existing = clientInvoices.find(
-      (invoice) => invoice.client_id === client.id && invoice.week_start === currentWeekStart,
+      (invoice) => invoice.client_id === client.id && invoice.week_start === ownerSubmissionsWeekStart,
     )
     const invoice = existing ?? (await handleCreateClientInvoice(client))
     if (invoice.dealt_with) return invoice
@@ -1103,9 +1120,14 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onSelectSubmission={setSelectedSubmissionId}
               activeClients={activeClients}
               clients={clients}
-              weekEntries={weekEntries}
+              weekEntries={ownerSubmissionsWeekSaleEntries}
               clientInvoices={clientInvoices}
-              currentWeekStart={currentWeekStart}
+              weekStart={ownerSubmissionsWeekStart}
+              weekEnd={ownerSubmissionsWeekEnd}
+              isCurrentWeek={ownerSubmissionsWeekStart === currentWeekStart}
+              onPreviousWeek={goToPreviousOwnerInvoicingWeek}
+              onNextWeek={goToNextOwnerInvoicingWeek}
+              onJumpToCurrentWeek={goToCurrentOwnerInvoicingWeek}
               selectedClientId={selectedClientId}
               onSelectClient={setSelectedClientId}
               onViewInvoice={(invoiceId) => setViewedInvoiceId(invoiceId)}
@@ -1121,20 +1143,9 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               weekStart={ownerSubmissionsWeekStart}
               weekEnd={ownerSubmissionsWeekEnd}
               isCurrentWeek={ownerSubmissionsWeekStart === currentWeekStart}
-              onPreviousWeek={() => {
-                const range = getPreviousWeekRange(ownerSubmissionsWeekStart)
-                setOwnerSubmissionsWeekStart(range.weekStart)
-                setOwnerSubmissionsWeekEnd(range.weekEnd)
-              }}
-              onNextWeek={() => {
-                const range = getNextWeekRange(ownerSubmissionsWeekStart)
-                setOwnerSubmissionsWeekStart(range.weekStart)
-                setOwnerSubmissionsWeekEnd(range.weekEnd)
-              }}
-              onJumpToCurrentWeek={() => {
-                setOwnerSubmissionsWeekStart(currentWeekStart)
-                setOwnerSubmissionsWeekEnd(currentWeekEnd)
-              }}
+              onPreviousWeek={goToPreviousOwnerInvoicingWeek}
+              onNextWeek={goToNextOwnerInvoicingWeek}
+              onJumpToCurrentWeek={goToCurrentOwnerInvoicingWeek}
               onAddOwnerSubmission={handleAddOwnerSubmission}
               onDeleteOwnerSubmission={handleDeleteOwnerSubmission}
               onUpdateOwnerSubmission={handleUpdateOwnerSubmission}
@@ -1166,8 +1177,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
         <ClientInvoiceModal
           client={selectedClient}
           clientName={selectedClient.name}
-          weekStart={currentWeekStart}
-          weekEnd={currentWeekEnd}
+          weekStart={ownerSubmissionsWeekStart}
+          weekEnd={ownerSubmissionsWeekEnd}
           entries={selectedClientEntries}
           workers={workers}
           existingInvoice={selectedClientInvoice}

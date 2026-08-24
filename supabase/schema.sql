@@ -178,6 +178,20 @@ alter table buster_customer_orders drop constraint if exists buster_customer_ord
 alter table buster_customer_orders add constraint buster_customer_orders_custom_type_check
   check (custom_type in ('custom_vid', 'custom_pics', 'video_cock_rate', 'panties_other', 'other'));
 
+-- One row per (client, worker) pair - a contractor's weekly hours for one
+-- client, owner-set (unlike buster_submissions.day_amounts, which the worker
+-- sets themselves). `shifts` is keyed by day name (e.g. "Monday") the same
+-- way day_amounts is - a day with no key means "Off" for that pair.
+create table if not exists buster_timetable_shifts (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references buster_clients(id),
+  worker_id uuid not null references buster_profiles(id),
+  shifts jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (client_id, worker_id)
+);
+
 -- Free-standing reminders/events on a calendar day, unrelated to sale
 -- entries (e.g. "Client meeting", "Payday") - owner-only, never surfaced to
 -- workers or learners.
@@ -487,6 +501,7 @@ alter table buster_owner_submissions enable row level security;
 alter table buster_owner_submission_invoices enable row level security;
 alter table buster_payment_methods enable row level security;
 alter table buster_worker_payment_details enable row level security;
+alter table buster_timetable_shifts enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -652,6 +667,20 @@ drop policy if exists "owner manages" on buster_calendar_events;
 create policy "owner manages" on buster_calendar_events for all
   using (buster_is_owner())
   with check (buster_is_owner());
+
+-- buster_timetable_shifts policies - owner-only writes (the owner builds the
+-- whole timetable), but unlike buster_calendar_events a worker can read
+-- their own rows, so their "Work Timetable" tab shows only what's theirs.
+drop policy if exists "owner manages" on buster_timetable_shifts;
+create policy "owner manages" on buster_timetable_shifts for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+drop policy if exists "worker reads own" on buster_timetable_shifts;
+create policy "worker reads own" on buster_timetable_shifts for select
+  using (
+    worker_id in (select id from buster_profiles where auth_user_id = auth.uid())
+  );
 
 -- buster_owner_submission_items / buster_owner_submissions /
 -- buster_owner_submission_invoices policies - owner-only, same shape as

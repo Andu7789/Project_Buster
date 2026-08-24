@@ -1,10 +1,19 @@
-export type OwnerTabId = 'team' | 'learners' | 'submissions' | 'ownerSubmissions' | 'calendar' | 'requests' | 'account'
+export type OwnerTabId =
+  | 'team'
+  | 'learners'
+  | 'submissions'
+  | 'ownerSubmissions'
+  | 'calendar'
+  | 'timetable'
+  | 'requests'
+  | 'account'
 
 const tabs: { id: OwnerTabId; label: string }[] = [
   { id: 'submissions', label: 'Submissions & Invoices' },
   { id: 'ownerSubmissions', label: 'PM Sales' },
   { id: 'team', label: 'Teams, Clients & Sale Types' },
   { id: 'calendar', label: 'Calendar' },
+  { id: 'timetable', label: 'Work Timetable' },
   { id: 'learners', label: 'Learners & Training' },
   { id: 'requests', label: 'Requests & Bugs' },
   { id: 'account', label: 'Account' },

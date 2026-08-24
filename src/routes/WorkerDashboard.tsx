@@ -327,7 +327,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         />
       )}
 
-      {activeTab === 'workTimetable' && <WorkTimetableTab />}
+      {activeTab === 'workTimetable' && <WorkTimetableTab workerId={profile.id} clients={clients} />}
 
       {activeTab === 'paymentDetails' && (
         <PaymentDetailsTab paymentDetails={paymentDetails} onSave={handleSavePaymentDetails} />

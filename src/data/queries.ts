@@ -6,6 +6,7 @@ import type {
   ClientInvoice,
   CustomerOrder,
   CustomOrderType,
+  DayShift,
   DevRequest,
   OwnerSubmission,
   OwnerSubmissionCategory,
@@ -22,6 +23,7 @@ import type {
   SaleSection,
   SaleType,
   Submission,
+  TimetableShift,
   TrainingProgress,
   WorkerPaymentDetails,
 } from '../types'
@@ -653,6 +655,51 @@ export async function upsertCustomerOrder(input: {
 
   if (error) throw error
   return data as CustomerOrder
+}
+
+export async function listTimetableShiftsForClient(clientId: string): Promise<TimetableShift[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_timetable_shifts').select('*').eq('client_id', clientId)
+  if (error) throw error
+  return (data ?? []) as TimetableShift[]
+}
+
+export async function listTimetableShiftsForWorker(workerId: string): Promise<TimetableShift[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_timetable_shifts').select('*').eq('worker_id', workerId)
+  if (error) throw error
+  return (data ?? []) as TimetableShift[]
+}
+
+export async function addTimetableShift(input: { clientId: string; workerId: string }): Promise<TimetableShift> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_timetable_shifts')
+    .insert({ client_id: input.clientId, worker_id: input.workerId, shifts: {} })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as TimetableShift
+}
+
+export async function updateTimetableShift(shiftId: string, shifts: Record<string, DayShift>): Promise<TimetableShift> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_timetable_shifts')
+    .update({ shifts, updated_at: new Date().toISOString() })
+    .eq('id', shiftId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as TimetableShift
+}
+
+export async function deleteTimetableShift(shiftId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_timetable_shifts').delete().eq('id', shiftId)
+  if (error) throw error
 }
 
 export async function listCalendarEventsForRange(startDate: string, endDate: string): Promise<CalendarEvent[]> {

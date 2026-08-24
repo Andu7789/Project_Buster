@@ -85,6 +85,7 @@ import { LearnersTrainingTab } from './OwnerDashboard/LearnersTrainingTab'
 import { SubmissionsInvoicesTab } from './OwnerDashboard/SubmissionsInvoicesTab'
 import { OwnerSubmissionsTab } from './OwnerDashboard/OwnerSubmissionsTab'
 import { CalendarTab } from './OwnerDashboard/CalendarTab'
+import { WorkTimetableTab } from './OwnerDashboard/WorkTimetableTab'
 import { RequestsTab } from './OwnerDashboard/RequestsTab'
 import { AccountTab } from './OwnerDashboard/AccountTab'
 
@@ -1172,6 +1173,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           )}
 
           {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} saleTypes={saleTypes} />}
+
+          {activeTab === 'timetable' && <WorkTimetableTab workers={workers} clients={clients} />}
 
           {activeTab === 'requests' && <RequestsTab profile={profile} />}
         </>

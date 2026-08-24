@@ -974,6 +974,38 @@ a:focus-visible {
   cursor: pointer;
 }
 
+.timetable-day-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 130px;
+}
+
+.timetable-off-toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.timetable-off-toggle input {
+  width: auto;
+}
+
+.timetable-time-inputs {
+  display: flex;
+  gap: 6px;
+}
+
+.timetable-time-inputs input {
+  width: 100%;
+  padding: 6px 8px;
+}
+
 .owner-submission-add-row {
   display: grid;
   grid-template-columns: 140px minmax(85px, 140px) 113px 100px 113px minmax(140px, auto) auto;

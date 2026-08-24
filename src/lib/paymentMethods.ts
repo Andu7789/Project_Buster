@@ -21,6 +21,10 @@ export const paymentMethodFields: Record<PaymentMethodType, { key: string; label
     { key: 'accountName', label: 'Account holder name' },
     { key: 'email', label: 'WISE email' },
     { key: 'accountNumber', label: 'Account number / IBAN' },
+    { key: 'phoneNumber', label: 'Phone number' },
+    { key: 'country', label: 'Country' },
+    { key: 'city', label: 'City' },
+    { key: 'postalCode', label: 'Postal code' },
   ],
   paypal: [{ key: 'email', label: 'PayPal email' }],
 }

@@ -113,6 +113,25 @@ export interface CustomerOrder {
   updated_at: string
 }
 
+export interface DayShift {
+  start: string
+  end: string
+}
+
+/**
+ * One contractor's weekly hours for one client - one row per (client, worker)
+ * pair, days keyed by name (e.g. "Monday") in `shifts`. A day with no key is
+ * "Off"; unlike Submission.day_amounts this is owner-set, not worker-set.
+ */
+export interface TimetableShift {
+  id: string
+  client_id: string
+  worker_id: string
+  shifts: Record<string, DayShift>
+  created_at: string
+  updated_at: string
+}
+
 export interface CalendarEvent {
   id: string
   event_date: string

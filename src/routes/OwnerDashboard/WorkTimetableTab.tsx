@@ -22,13 +22,11 @@ function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (
 function TimetableRow({
   row,
   workerName,
-  clientName,
   onSave,
   onRemove,
 }: {
   row: TimetableShift
   workerName: string
-  clientName: string
   onSave: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
   onRemove: (rowId: string) => void
 }) {
@@ -66,7 +64,6 @@ function TimetableRow({
   return (
     <tr>
       <td>{workerName}</td>
-      <td>{clientName}</td>
       {daysOfWeek.map((day) => (
         <td key={day}>
           <DayCell value={draft[day]} onChange={(value) => setDay(day, value)} />
@@ -88,14 +85,109 @@ function TimetableRow({
   )
 }
 
+function ClientTimetableSection({
+  client,
+  activeWorkers,
+  workers,
+  rows,
+  onAdd,
+  onSaveRow,
+  onRemoveRow,
+}: {
+  client: Client
+  activeWorkers: Profile[]
+  workers: Profile[]
+  rows: TimetableShift[]
+  onAdd: (clientId: string, workerId: string) => Promise<void>
+  onSaveRow: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
+  onRemoveRow: (rowId: string) => void
+}) {
+  const [addWorkerId, setAddWorkerId] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  const availableWorkers = activeWorkers.filter((worker) => !rows.some((row) => row.worker_id === worker.id))
+
+  async function handleAdd(event: FormEvent) {
+    event.preventDefault()
+    if (!addWorkerId) return
+    setAdding(true)
+    setAddError(null)
+    try {
+      await onAdd(client.id, addWorkerId)
+      setAddWorkerId('')
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Could not add this contractor.')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <h2>{client.name}</h2>
+        </div>
+      </div>
+
+      <form className="add-worker-form" onSubmit={handleAdd}>
+        <label>
+          Contractor
+          <select value={addWorkerId} onChange={(event) => setAddWorkerId(event.target.value)}>
+            <option value="">Select a contractor…</option>
+            {availableWorkers.map((worker) => (
+              <option key={worker.id} value={worker.id}>
+                {worker.full_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="btn-primary" disabled={adding || !addWorkerId}>
+          {adding ? 'Adding…' : 'Add contractor'}
+        </button>
+      </form>
+      {addError && <p className="message message-error">{addError}</p>}
+
+      <div className="table-wrapper">
+        <table className="detail-table">
+          <thead>
+            <tr>
+              <th>Contractor</th>
+              {daysOfWeek.map((day) => (
+                <th key={day}>{day}</th>
+              ))}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <TimetableRow
+                key={row.id}
+                row={row}
+                workerName={workers.find((worker) => worker.id === row.worker_id)?.full_name ?? 'Unknown'}
+                onSave={onSaveRow}
+                onRemove={onRemoveRow}
+              />
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={daysOfWeek.length + 2} className="empty-row">
+                  No contractors added yet for this client.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; clients: Client[] }) {
   const [rows, setRows] = useState<TimetableShift[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [addWorkerId, setAddWorkerId] = useState('')
-  const [addClientId, setAddClientId] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
 
   const activeWorkers = workers.filter((worker) => worker.status === 'active')
   const activeClients = clients.filter((client) => client.active)
@@ -117,21 +209,9 @@ export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; cli
     }
   }, [])
 
-  async function handleAddRow(event: FormEvent) {
-    event.preventDefault()
-    if (!addWorkerId || !addClientId) return
-    setAdding(true)
-    setAddError(null)
-    try {
-      const created = await addTimetableShift({ clientId: addClientId, workerId: addWorkerId })
-      setRows((previous) => [...previous, created])
-      setAddWorkerId('')
-      setAddClientId('')
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Could not add this row - that contractor may already be on this client.')
-    } finally {
-      setAdding(false)
-    }
+  async function handleAdd(clientId: string, workerId: string) {
+    const created = await addTimetableShift({ clientId, workerId })
+    setRows((previous) => [...previous, created])
   }
 
   async function handleSaveRow(rowId: string, shifts: Record<string, DayShift>) {
@@ -140,7 +220,7 @@ export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; cli
   }
 
   async function handleRemoveRow(rowId: string) {
-    const confirmed = window.confirm('Remove this row from the timetable?')
+    const confirmed = window.confirm('Remove this contractor from the timetable?')
     if (!confirmed) return
     try {
       await deleteTimetableShift(rowId)
@@ -150,93 +230,39 @@ export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; cli
     }
   }
 
-  const sortedRows = [...rows].sort((a, b) => {
-    const clientCompare = (clients.find((c) => c.id === a.client_id)?.name ?? '').localeCompare(
-      clients.find((c) => c.id === b.client_id)?.name ?? '',
+  if (loading) {
+    return (
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Work timetable</h2>
+          </div>
+        </div>
+        <p className="info-text">Loading…</p>
+      </section>
     )
-    if (clientCompare !== 0) return clientCompare
-    return (workers.find((w) => w.id === a.worker_id)?.full_name ?? '').localeCompare(
-      workers.find((w) => w.id === b.worker_id)?.full_name ?? '',
-    )
-  })
+  }
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <div>
-          <h2>Work timetable</h2>
-          <p>Every contractor's weekly hours, across every client. A contractor can be added to more than one client.</p>
-        </div>
-      </div>
-
-      <form className="add-worker-form" onSubmit={handleAddRow}>
-        <label>
-          Contractor
-          <select value={addWorkerId} onChange={(event) => setAddWorkerId(event.target.value)}>
-            <option value="">Select a contractor…</option>
-            {activeWorkers.map((worker) => (
-              <option key={worker.id} value={worker.id}>
-                {worker.full_name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Client
-          <select value={addClientId} onChange={(event) => setAddClientId(event.target.value)}>
-            <option value="">Select a client…</option>
-            {activeClients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="btn-primary" disabled={adding || !addWorkerId || !addClientId}>
-          {adding ? 'Adding…' : 'Add row'}
-        </button>
-      </form>
-      {addError && <p className="message message-error">{addError}</p>}
-
-      {loading ? (
-        <p className="info-text">Loading…</p>
-      ) : (
-        <div className="table-wrapper">
-          <table className="detail-table">
-            <thead>
-              <tr>
-                <th>Contractor</th>
-                <th>Client</th>
-                {daysOfWeek.map((day) => (
-                  <th key={day}>{day}</th>
-                ))}
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map((row) => (
-                <TimetableRow
-                  key={row.id}
-                  row={row}
-                  workerName={workers.find((worker) => worker.id === row.worker_id)?.full_name ?? 'Unknown'}
-                  clientName={clients.find((client) => client.id === row.client_id)?.name ?? 'Unknown'}
-                  onSave={handleSaveRow}
-                  onRemove={handleRemoveRow}
-                />
-              ))}
-              {sortedRows.length === 0 && (
-                <tr>
-                  <td colSpan={daysOfWeek.length + 3} className="empty-row">
-                    No contractors added to the timetable yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+    <>
+      {activeClients.map((client) => (
+        <ClientTimetableSection
+          key={client.id}
+          client={client}
+          activeWorkers={activeWorkers}
+          workers={workers}
+          rows={rows.filter((row) => row.client_id === client.id)}
+          onAdd={handleAdd}
+          onSaveRow={handleSaveRow}
+          onRemoveRow={handleRemoveRow}
+        />
+      ))}
+      {activeClients.length === 0 && (
+        <section className="panel">
+          <p className="info-text">No active clients yet.</p>
+        </section>
       )}
-
       {loadError && <p className="message message-error">{loadError}</p>}
-    </section>
+    </>
   )
 }

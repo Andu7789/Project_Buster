@@ -657,9 +657,10 @@ export async function upsertCustomerOrder(input: {
   return data as CustomerOrder
 }
 
-export async function listTimetableShiftsForClient(clientId: string): Promise<TimetableShift[]> {
+/** Every timetable row across every client - the owner's Work Timetable tab shows them all at once. */
+export async function listAllTimetableShifts(): Promise<TimetableShift[]> {
   const client = requireClient()
-  const { data, error } = await client.from('buster_timetable_shifts').select('*').eq('client_id', clientId)
+  const { data, error } = await client.from('buster_timetable_shifts').select('*')
   if (error) throw error
   return (data ?? []) as TimetableShift[]
 }

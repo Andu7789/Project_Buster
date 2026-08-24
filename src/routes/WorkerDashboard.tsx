@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/authContext'
 import {
-  getNextInvoiceNumberForWorker,
+  createInvoiceForSubmission,
   getWorkerPaymentDetails,
   listClients,
   listCustomerOrdersForWorker,
@@ -53,6 +53,8 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [missingOrderRows, setMissingOrderRows] = useState<MissingCustomerOrderRow[] | null>(null)
+  const [creatingInvoiceFor, setCreatingInvoiceFor] = useState<string | null>(null)
+  const [invoiceError, setInvoiceError] = useState<string | null>(null)
 
   const { weekStart, weekEnd } = useMemo(() => getCurrentWeekRange(), [])
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart])
@@ -94,9 +96,14 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     }
   }, [profile.id, weekStart, weekEnd, graceActive, previousWeek.weekStart, previousWeek.weekEnd])
 
-  const alreadySubmittedThisWeek = submissions.some((submission) => submission.week_start === weekStart)
-  const alreadySubmittedLastWeek = submissions.some((submission) => submission.week_start === previousWeek.weekStart)
-  const showLastWeekPanel = graceActive && !alreadySubmittedLastWeek
+  const currentWeekSubmission = submissions.find((submission) => submission.week_start === weekStart) ?? null
+  const previousWeekSubmission = submissions.find((submission) => submission.week_start === previousWeek.weekStart) ?? null
+  const alreadySubmittedThisWeek = currentWeekSubmission !== null
+  const alreadySubmittedLastWeek = previousWeekSubmission !== null
+  // Keeps the "Last week" panel open through the grace period even after submitting, as long as
+  // its invoice hasn't been created yet - "Submit earnings" and "Create & send weekly invoice"
+  // are separate steps, so there needs to still be somewhere to do the second one from.
+  const showLastWeekPanel = graceActive && (!previousWeekSubmission || previousWeekSubmission.invoice_number === null)
   const lifetimeTotal = useMemo(() => submissions.reduce((sum, submission) => sum + submission.amount, 0), [submissions])
 
   const totalsByDate = useMemo(() => {
@@ -232,7 +239,6 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
 
     setSubmitting(true)
     try {
-      const invoiceNumber = await getNextInvoiceNumberForWorker(profile.id)
       const created = await submitTimesheet({
         workerId: profile.id,
         weekStart: params.weekStart,
@@ -240,21 +246,35 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         dayAmounts,
         amount: total,
         ownerSharePercent: profile.owner_share_percent,
-        invoiceNumber,
       })
       setSubmissions((previous) => [created, ...previous])
-      await downloadInvoicePdf(created, earningsByClient(params.entries, clients), [created, ...submissions])
-      void notifyTelegram('worker_invoice_created', {
-        actorName: profile.full_name,
-        weekStart: created.week_start,
-        weekEnd: created.week_end,
-        amount: created.amount,
-      })
-      setMessage('Weekly invoice sent to your employer and saved to your downloads.')
+      setMessage('Weekly submission sent to your employer.')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not submit your timesheet.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  /** The separate "Create & send weekly invoice" step - only runs after a week's earnings are already submitted. */
+  async function handleCreateInvoice(submission: Submission, clientTotals: ClientEarningsTotal[]) {
+    setInvoiceError(null)
+    setCreatingInvoiceFor(submission.id)
+    try {
+      const invoiced = await createInvoiceForSubmission(submission.id)
+      const nextSubmissions = submissions.map((entry) => (entry.id === invoiced.id ? invoiced : entry))
+      setSubmissions(nextSubmissions)
+      await downloadInvoicePdf(invoiced, clientTotals, nextSubmissions)
+      void notifyTelegram('worker_invoice_created', {
+        actorName: profile.full_name,
+        weekStart: invoiced.week_start,
+        weekEnd: invoiced.week_end,
+        amount: invoiced.amount,
+      })
+    } catch (err) {
+      setInvoiceError(err instanceof Error ? err.message : 'Could not create the invoice.')
+    } finally {
+      setCreatingInvoiceFor(null)
     }
   }
 
@@ -315,6 +335,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
           clientTotals={clientTotals}
           liveTotal={liveTotal}
           alreadySubmittedThisWeek={alreadySubmittedThisWeek}
+          currentWeekSubmission={currentWeekSubmission}
           onSubmit={handleSubmit}
           onDayClick={setSelectedDate}
           showLastWeekPanel={showLastWeekPanel}
@@ -323,11 +344,15 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
           previousTotalsByDate={previousTotalsByDate}
           previousClientTotals={previousClientTotals}
           previousLiveTotal={previousLiveTotal}
+          previousWeekSubmission={previousWeekSubmission}
           graceDeadlineLabel={graceDeadlineLabel}
           onSubmitLastWeek={handleSubmitLastWeek}
           submitting={submitting}
           formError={formError}
           message={message}
+          onCreateInvoice={handleCreateInvoice}
+          creatingInvoiceFor={creatingInvoiceFor}
+          invoiceError={invoiceError}
           submissions={submissions}
           loadingSubmissions={loadingSubmissions}
           loadError={loadError}

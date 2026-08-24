@@ -515,6 +515,55 @@ $$;
 
 grant execute on function buster_delete_submission(uuid) to authenticated;
 
+-- Formalizes an already-submitted weekly timesheet into an invoice, by
+-- assigning it the worker's next invoice_number - a distinct, later step
+-- from submitting the timesheet itself (buster_submissions has no owner
+-- update policy for workers - see the "worker deliberately have no
+-- UPDATE/DELETE policy" note below - so this narrow, one-way null -> number
+-- transition goes through a security-definer function, same shape as
+-- buster_claim_profile()'s narrow pending -> active transition, rather than
+-- opening up a general worker update policy on the table). Idempotent - if
+-- the submission already has a number, just returns it unchanged, so a
+-- double-click or retry can't hand out two numbers for the same invoice.
+create or replace function buster_create_invoice_for_submission(target_id uuid)
+returns buster_submissions
+language plpgsql
+security definer
+as $$
+declare
+  target buster_submissions%rowtype;
+  next_number integer;
+begin
+  select * into target from buster_submissions where id = target_id;
+  if not found then
+    raise exception 'Submission not found.';
+  end if;
+
+  if not (
+    target.worker_id in (select id from buster_profiles where auth_user_id = auth.uid())
+    or buster_is_owner()
+  ) then
+    raise exception 'Not authorized.';
+  end if;
+
+  if target.invoice_number is not null then
+    return target;
+  end if;
+
+  select coalesce(max(invoice_number), 0) + 1 into next_number
+  from buster_submissions where worker_id = target.worker_id;
+
+  update buster_submissions
+  set invoice_number = next_number
+  where id = target_id
+  returning * into target;
+
+  return target;
+end;
+$$;
+
+grant execute on function buster_create_invoice_for_submission(uuid) to authenticated;
+
 alter table buster_profiles enable row level security;
 alter table buster_submissions enable row level security;
 alter table buster_clients enable row level security;

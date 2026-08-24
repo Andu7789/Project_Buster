@@ -1203,7 +1203,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
           {activeTab === 'invoices' && (
             <InvoicesTab
-              submissions={submissions}
+              submissions={submissions.filter((submission) => submission.invoice_number !== null)}
               workers={workers}
               onDownloadInvoice={handleDownloadWorkerInvoicePdf}
               onMarkPaid={handleMarkSubmissionPaid}

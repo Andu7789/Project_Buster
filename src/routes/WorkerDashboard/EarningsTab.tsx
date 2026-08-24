@@ -19,9 +19,12 @@ function WeekPanel({
   submitLabel,
   onSubmit,
   submitting,
-  showSubmit,
   formError,
   message,
+  submission,
+  onCreateInvoice,
+  creatingInvoice,
+  invoiceError,
 }: {
   title: string
   subtitle: string
@@ -34,9 +37,12 @@ function WeekPanel({
   submitLabel: string
   onSubmit: () => void
   submitting: boolean
-  showSubmit: boolean
   formError: string | null
   message: string | null
+  submission: Submission | null
+  onCreateInvoice: () => void
+  creatingInvoice: boolean
+  invoiceError: string | null
 }) {
   return (
     <section className="panel worker-panel">
@@ -93,13 +99,23 @@ function WeekPanel({
           <p className="summary-figure">{formatCurrency(liveTotal)}</p>
         </div>
 
-        {showSubmit && (
+        {!submission && (
           <button type="button" className="btn-primary" onClick={onSubmit} disabled={submitting}>
             {submitting ? 'Submitting…' : submitLabel}
           </button>
         )}
         {formError && <p className="message message-error">{formError}</p>}
         {message && <p className="message message-info">{message}</p>}
+
+        {submission && submission.invoice_number === null && (
+          <button type="button" className="btn-primary" onClick={onCreateInvoice} disabled={creatingInvoice}>
+            {creatingInvoice ? 'Sending…' : 'Create & send weekly invoice'}
+          </button>
+        )}
+        {submission && submission.invoice_number !== null && (
+          <p className="info-text">Invoice #{submission.invoice_number} sent.</p>
+        )}
+        {invoiceError && <p className="message message-error">{invoiceError}</p>}
       </div>
     </section>
   )
@@ -113,6 +129,7 @@ export function EarningsTab({
   clientTotals,
   liveTotal,
   alreadySubmittedThisWeek,
+  currentWeekSubmission,
   onSubmit,
   onDayClick,
 
@@ -122,12 +139,16 @@ export function EarningsTab({
   previousTotalsByDate,
   previousClientTotals,
   previousLiveTotal,
+  previousWeekSubmission,
   graceDeadlineLabel,
   onSubmitLastWeek,
 
   submitting,
   formError,
   message,
+  onCreateInvoice,
+  creatingInvoiceFor,
+  invoiceError,
 
   submissions,
   loadingSubmissions,
@@ -159,6 +180,7 @@ export function EarningsTab({
   clientTotals: ClientEarningsTotal[]
   liveTotal: number
   alreadySubmittedThisWeek: boolean
+  currentWeekSubmission: Submission | null
   onSubmit: () => void
   onDayClick: (date: string) => void
 
@@ -168,12 +190,16 @@ export function EarningsTab({
   previousTotalsByDate: Map<string, number>
   previousClientTotals: ClientEarningsTotal[]
   previousLiveTotal: number
+  previousWeekSubmission: Submission | null
   graceDeadlineLabel: string
   onSubmitLastWeek: () => void
 
   submitting: boolean
   formError: string | null
   message: string | null
+  onCreateInvoice: (submission: Submission, clientTotals: ClientEarningsTotal[]) => void
+  creatingInvoiceFor: string | null
+  invoiceError: string | null
 
   submissions: Submission[]
   loadingSubmissions: boolean
@@ -215,12 +241,15 @@ export function EarningsTab({
         liveTotal={liveTotal}
         totalLabel="Current week total"
         onDayClick={onDayClick}
-        submitLabel="Create & send weekly invoice"
+        submitLabel="Submit earnings"
         onSubmit={onSubmit}
         submitting={submitting}
-        showSubmit={!alreadySubmittedThisWeek}
         formError={formError}
         message={message}
+        submission={currentWeekSubmission}
+        onCreateInvoice={() => currentWeekSubmission && onCreateInvoice(currentWeekSubmission, clientTotals)}
+        creatingInvoice={creatingInvoiceFor === currentWeekSubmission?.id}
+        invoiceError={invoiceError}
       />
 
       {showLastWeekPanel && (
@@ -233,12 +262,15 @@ export function EarningsTab({
           liveTotal={previousLiveTotal}
           totalLabel="Last week total"
           onDayClick={onDayClick}
-          submitLabel="Create & send last week's invoice"
+          submitLabel="Submit last week's earnings"
           onSubmit={onSubmitLastWeek}
           submitting={submitting}
-          showSubmit
           formError={formError}
           message={message}
+          submission={previousWeekSubmission}
+          onCreateInvoice={() => previousWeekSubmission && onCreateInvoice(previousWeekSubmission, previousClientTotals)}
+          creatingInvoice={creatingInvoiceFor === previousWeekSubmission?.id}
+          invoiceError={invoiceError}
         />
       )}
 
@@ -285,7 +317,7 @@ export function EarningsTab({
                 {submissions.length === 0 && (
                   <tr>
                     <td colSpan={4} className="empty-row">
-                      No invoices submitted yet.
+                      No timesheets submitted yet.
                     </td>
                   </tr>
                 )}
@@ -296,7 +328,7 @@ export function EarningsTab({
       </section>
 
       {selectedSubmission && (
-        <Modal title="Invoice detail" onClose={onCloseSubmissionModal}>
+        <Modal title="Timesheet detail" onClose={onCloseSubmissionModal}>
           <p className="modal-subtitle">{formatWeekRange(selectedSubmission.week_start, selectedSubmission.week_end)}</p>
           <div className="detail-summary">
             <div>
@@ -317,13 +349,25 @@ export function EarningsTab({
             </div>
           </div>
 
-          <button
-            type="button"
-            className="btn-outline"
-            onClick={() => onDownloadInvoice(selectedSubmission, selectedSubmissionClientTotals)}
-          >
-            Download invoice PDF
-          </button>
+          {selectedSubmission.invoice_number === null ? (
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => onCreateInvoice(selectedSubmission, selectedSubmissionClientTotals)}
+              disabled={creatingInvoiceFor === selectedSubmission.id}
+            >
+              {creatingInvoiceFor === selectedSubmission.id ? 'Sending…' : 'Create & send weekly invoice'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => onDownloadInvoice(selectedSubmission, selectedSubmissionClientTotals)}
+            >
+              Download invoice PDF
+            </button>
+          )}
+          {invoiceError && <p className="message message-error">{invoiceError}</p>}
 
           <table className="detail-table">
             <thead>

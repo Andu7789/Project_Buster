@@ -52,6 +52,7 @@ export interface Client {
   customs_owner_percent: number
   color: string
   active: boolean
+  telegram_chat_id: string | null
   created_at: string
 }
 

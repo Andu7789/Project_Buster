@@ -8,12 +8,14 @@ function ClientRow({
   clientRow,
   onToggleClient,
   onUpdatePayoutDetails,
+  onUpdateTelegramChatId,
   onUpdateNextInvoiceNumber,
   onUpdateColor,
 }: {
   clientRow: Client
   onToggleClient: (client: Client) => void
   onUpdatePayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
+  onUpdateTelegramChatId: (client: Client, telegramChatId: string) => void
   onUpdateNextInvoiceNumber: (client: Client, value: number) => void
   onUpdateColor: (client: Client, color: string) => void
 }) {
@@ -28,6 +30,19 @@ function ClientRow({
   function saveRealName() {
     if (realNameDraft.trim() === (clientRow.real_name ?? '')) return
     onUpdatePayoutDetails(clientRow, { realName: realNameDraft, paymentMethod: clientRow.payment_method })
+  }
+
+  const [telegramChatIdDraft, setTelegramChatIdDraft] = useState(clientRow.telegram_chat_id ?? '')
+  const [syncedTelegramChatId, setSyncedTelegramChatId] = useState(clientRow.telegram_chat_id)
+
+  if (clientRow.telegram_chat_id !== syncedTelegramChatId) {
+    setSyncedTelegramChatId(clientRow.telegram_chat_id)
+    setTelegramChatIdDraft(clientRow.telegram_chat_id ?? '')
+  }
+
+  function saveTelegramChatId() {
+    if (telegramChatIdDraft.trim() === (clientRow.telegram_chat_id ?? '')) return
+    onUpdateTelegramChatId(clientRow, telegramChatIdDraft)
   }
 
   const [invoiceNumberDraft, setInvoiceNumberDraft] = useState(String(clientRow.next_invoice_number))
@@ -93,6 +108,14 @@ function ClientRow({
           value={invoiceNumberDraft}
           onChange={(event) => setInvoiceNumberDraft(event.target.value)}
           onBlur={saveInvoiceNumber}
+        />
+      </td>
+      <td>
+        <input
+          value={telegramChatIdDraft}
+          placeholder="Telegram chat ID"
+          onChange={(event) => setTelegramChatIdDraft(event.target.value)}
+          onBlur={saveTelegramChatId}
         />
       </td>
       <td>{clientRow.active ? 'Active' : 'Inactive'}</td>
@@ -226,6 +249,7 @@ export function TeamClientsSaleTypesTab({
   onAddClient,
   onToggleClient,
   onUpdateClientPayoutDetails,
+  onUpdateClientTelegramChatId,
   onUpdateClientNextInvoiceNumber,
   onUpdateClientOwnerPercents,
   onUpdateClientColor,
@@ -269,6 +293,7 @@ export function TeamClientsSaleTypesTab({
   onAddClient: (event: FormEvent) => void
   onToggleClient: (client: Client) => void
   onUpdateClientPayoutDetails: (client: Client, input: { realName: string; paymentMethod: PaymentMethodType | null }) => void
+  onUpdateClientTelegramChatId: (client: Client, telegramChatId: string) => void
   onUpdateClientNextInvoiceNumber: (client: Client, value: number) => void
   onUpdateClientColor: (client: Client, color: string) => void
   onUpdateClientOwnerPercents: (
@@ -440,6 +465,7 @@ export function TeamClientsSaleTypesTab({
                 <th>Real name</th>
                 <th>Payment method</th>
                 <th>Next invoice #</th>
+                <th>Telegram chat ID</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -451,13 +477,14 @@ export function TeamClientsSaleTypesTab({
                   clientRow={clientRow}
                   onToggleClient={onToggleClient}
                   onUpdatePayoutDetails={onUpdateClientPayoutDetails}
+                  onUpdateTelegramChatId={onUpdateClientTelegramChatId}
                   onUpdateNextInvoiceNumber={onUpdateClientNextInvoiceNumber}
                   onUpdateColor={onUpdateClientColor}
                 />
               ))}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="empty-row">
+                  <td colSpan={8} className="empty-row">
                     No clients yet — add your first one above.
                   </td>
                 </tr>

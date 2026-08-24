@@ -38,6 +38,7 @@ import {
   updateClientNextInvoiceNumber,
   updateClientOwnerPercents,
   updateClientPayoutDetails,
+  updateClientTelegramChatId,
   updateOwnerSubmission,
   updatePaymentMethodDetails,
   updateWorkerShare,
@@ -548,6 +549,15 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     setPaymentMethods((previous) => previous.map((entry) => (entry.method === method ? updated : entry)))
   }
 
+  async function handleUpdateClientTelegramChatId(clientToUpdate: Client, telegramChatId: string) {
+    try {
+      const updated = await updateClientTelegramChatId(clientToUpdate.id, telegramChatId)
+      setClients((previous) => previous.map((c) => (c.id === clientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
   async function handleUpdateClientNextInvoiceNumber(clientToUpdate: Client, value: number) {
     try {
       const updated = await updateClientNextInvoiceNumber(clientToUpdate.id, value)
@@ -1053,6 +1063,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onAddClient={handleAddClient}
               onToggleClient={handleToggleClient}
               onUpdateClientPayoutDetails={handleUpdateClientPayoutDetails}
+              onUpdateClientTelegramChatId={handleUpdateClientTelegramChatId}
               onUpdateClientNextInvoiceNumber={handleUpdateClientNextInvoiceNumber}
               onUpdateClientOwnerPercents={handleUpdateClientOwnerPercents}
               onUpdateClientColor={handleUpdateClientColor}

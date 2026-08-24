@@ -91,6 +91,12 @@ where c.id = sub.id and c.color is null;
 alter table buster_clients alter column color set default '#6673d1';
 alter table buster_clients alter column color set not null;
 
+-- Migration: per-client Telegram chat ID, used to notify that client directly
+-- (via the notify-telegram edge function) when a worker completes a customer
+-- order form for them. Nullable - notifications are best-effort and simply
+-- skipped for a client with none set.
+alter table buster_clients add column if not exists telegram_chat_id text;
+
 -- The owner's own payout details for each method - a fixed set of 3 rows
 -- (seeded below, never inserted/deleted from the app, only updated in
 -- place). Owner-only end to end (no "anyone signed in reads" policy like

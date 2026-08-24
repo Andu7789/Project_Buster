@@ -407,6 +407,19 @@ export async function updateClientOwnerPercents(
   return data as Client
 }
 
+export async function updateClientTelegramChatId(clientId: string, telegramChatId: string): Promise<Client> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_clients')
+    .update({ telegram_chat_id: telegramChatId.trim() || null })
+    .eq('id', clientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as Client
+}
+
 export async function updateClientNextInvoiceNumber(clientId: string, nextInvoiceNumber: number): Promise<Client> {
   const client = requireClient()
   const { data, error } = await client
@@ -997,7 +1010,7 @@ export async function getScreenshotSignedUrls(paths: string[]): Promise<Record<s
  * blocks the request/comment/status-update it's reporting on.
  */
 export async function notifyTelegram(
-  event: 'request_created' | 'status_changed' | 'comment_added',
+  event: 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed',
   payload: Record<string, unknown>,
 ): Promise<void> {
   const client = requireClient()

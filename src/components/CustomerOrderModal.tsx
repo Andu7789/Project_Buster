@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Modal } from './Modal'
-import { upsertCustomerOrder } from '../data/queries'
+import { notifyTelegram, upsertCustomerOrder } from '../data/queries'
 import { customOrderTypeLabel, customOrderTypes, customOrderTypesNeedingDetail } from '../lib/customerOrders'
 import type { CustomerOrder, CustomOrderType, SaleEntry } from '../types'
 
@@ -34,6 +34,7 @@ export function CustomerOrderModal({
   entry,
   clientName,
   workerId,
+  workerName,
   order,
   onSaved,
   onClose,
@@ -41,6 +42,7 @@ export function CustomerOrderModal({
   entry: SaleEntry
   clientName: string
   workerId: string
+  workerName: string
   order: CustomerOrder | undefined
   onSaved: (order: CustomerOrder) => void
   onClose: () => void
@@ -94,6 +96,22 @@ export function CustomerOrderModal({
         addedToWaitingList,
       })
       onSaved(saved)
+      if (entry.client_id) {
+        const typeLabel =
+          customOrderTypeLabel[customType] +
+          (customOrderTypesNeedingDetail.includes(customType) ? ` (${customTypeOther.trim()})` : '')
+        void notifyTelegram('customer_order_completed', {
+          clientId: entry.client_id,
+          clientName,
+          actorName: workerName,
+          customType: typeLabel,
+          buyerUsername: entry.buyer_username,
+          profileLink: profileLink.trim(),
+          customInfo: customInfo.trim(),
+          pinnedMessages,
+          addedToWaitingList,
+        })
+      }
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this customer order.')

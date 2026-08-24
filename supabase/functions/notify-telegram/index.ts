@@ -1,7 +1,7 @@
-// Relays request-tracker events (new request / status change / comment) to
-// Telegram. Runs server-side because the bot token is a secret - it can
-// never be shipped in the client bundle, so the browser calls this function
-// instead of the Telegram API directly.
+// Relays request-tracker events (new request / status change / comment), plus
+// completed customer-order forms, to Telegram. Runs server-side because the
+// bot token is a secret - it can never be shipped in the client bundle, so
+// the browser calls this function instead of the Telegram API directly.
 //
 // Deploy: supabase functions deploy notify-telegram
 // Secrets (supabase secrets set ...): TELEGRAM_BOT_TOKEN, TELEGRAM_DEV_CHAT_ID,
@@ -14,19 +14,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-type NotifyEvent = 'request_created' | 'status_changed' | 'comment_added'
+type NotifyEvent = 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed'
 
 interface NotifyPayload {
   event: NotifyEvent
-  requestId: string
-  requestTitle: string
+  actorName: string
+  // request_created / status_changed / comment_added
+  requestId?: string
+  requestTitle?: string
   requestType?: string
   priority?: string
   status?: string
   progress?: number
   resolutionNotes?: string | null
   commentBody?: string
-  actorName: string
+  // customer_order_completed - chat ID is resolved server-side from clientId,
+  // never trusted from the caller, so a worker can't redirect a message to an
+  // arbitrary chat.
+  clientId?: string
+  clientName?: string
+  customType?: string
+  buyerUsername?: string
+  profileLink?: string
+  customInfo?: string
+  pinnedMessages?: boolean
+  addedToWaitingList?: boolean
 }
 
 const typeLabels: Record<string, string> = { bug: 'Bug', feature: 'Feature idea', billing: 'Charge request' }
@@ -38,8 +50,8 @@ const statusLabels: Record<string, string> = {
   declined: 'Declined',
 }
 
-function buildMessage(role: string, payload: NotifyPayload): string {
-  const title = payload.requestTitle
+function buildMessage(payload: NotifyPayload): string {
+  const title = payload.requestTitle ?? ''
 
   if (payload.event === 'request_created') {
     const type = typeLabels[payload.requestType ?? ''] ?? payload.requestType ?? 'Request'
@@ -56,6 +68,19 @@ function buildMessage(role: string, payload: NotifyPayload): string {
       return `✅ "${title}" marked complete${payload.resolutionNotes ? `\n${payload.resolutionNotes}` : ''}`
     }
     return `🔄 "${title}" is now ${status.toLowerCase()} (${payload.progress ?? 0}%)`
+  }
+
+  if (payload.event === 'customer_order_completed') {
+    const yesNo = (value: boolean | undefined) => (value ? 'Yes' : 'No')
+    return [
+      `🎬 New custom order from ${payload.actorName}`,
+      `Type: ${payload.customType ?? '—'}`,
+      `Username: ${payload.buyerUsername ?? '—'}`,
+      `Profile link: ${payload.profileLink ?? '—'}`,
+      `Details: ${payload.customInfo ?? '—'}`,
+      `Pinned messages: ${yesNo(payload.pinnedMessages)}`,
+      `Added to waiting list: ${yesNo(payload.addedToWaitingList)}`,
+    ].join('\n')
   }
 
   // comment_added
@@ -96,7 +121,7 @@ Deno.serve(async (req) => {
       .eq('auth_user_id', userData.user.id)
       .maybeSingle()
 
-    if (profileError || !profile || profile.status !== 'active' || !['owner', 'developer'].includes(profile.role)) {
+    if (profileError || !profile || profile.status !== 'active') {
       return new Response(JSON.stringify({ error: 'Not authorized' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -104,6 +129,77 @@ Deno.serve(async (req) => {
     }
 
     const payload = (await req.json()) as NotifyPayload
+
+    if (payload.event === 'customer_order_completed') {
+      // Only the worker who filled the form (or an owner) can trigger this -
+      // distinct from the request-tracker events below, which stay
+      // owner/developer only.
+      if (!['worker', 'owner'].includes(profile.role)) {
+        return new Response(JSON.stringify({ error: 'Not authorized' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      if (!payload.clientId || !payload.buyerUsername) {
+        return new Response(JSON.stringify({ error: 'Missing clientId or buyerUsername' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // The target chat is looked up server-side from the client row, never
+      // trusted from the caller - a worker's payload can't redirect the
+      // message to an arbitrary chat.
+      const { data: client, error: clientError } = await supabaseAdmin
+        .from('buster_clients')
+        .select('telegram_chat_id')
+        .eq('id', payload.clientId)
+        .maybeSingle()
+
+      if (clientError || !client?.telegram_chat_id) {
+        return new Response(JSON.stringify({ error: 'No Telegram chat configured for this client' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+      if (!botToken) {
+        console.error('Telegram secrets not configured (TELEGRAM_BOT_TOKEN)')
+        return new Response(JSON.stringify({ error: 'Telegram is not configured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const text = buildMessage(payload)
+      const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: client.telegram_chat_id, text }),
+      })
+
+      if (!telegramResponse.ok) {
+        const detail = await telegramResponse.text()
+        console.error('Telegram API error:', detail)
+        return new Response(JSON.stringify({ error: 'Telegram API error', detail }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!['owner', 'developer'].includes(profile.role)) {
+      return new Response(JSON.stringify({ error: 'Not authorized' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     if (!payload.event || !payload.requestTitle) {
       return new Response(JSON.stringify({ error: 'Missing event or requestTitle' }), {
         status: 400,
@@ -125,7 +221,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const text = buildMessage(profile.role, payload)
+    const text = buildMessage(payload)
 
     const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',

@@ -59,6 +59,7 @@ function CustomsOrderTable({
 
 export function SubmitCustomerOrderTab({
   workerId,
+  workerName,
   weekStart,
   weekEnd,
   entries,
@@ -72,6 +73,7 @@ export function SubmitCustomerOrderTab({
   onOrderSaved,
 }: {
   workerId: string
+  workerName: string
   weekStart: string
   weekEnd: string
   entries: SaleEntry[]
@@ -130,6 +132,7 @@ export function SubmitCustomerOrderTab({
           entry={openEntry}
           clientName={clients.find((client) => client.id === openEntry.client_id)?.name ?? 'General'}
           workerId={workerId}
+          workerName={workerName}
           order={customerOrders.find((candidate) => candidate.sale_entry_id === openEntry.id)}
           onSaved={onOrderSaved}
           onClose={() => setOpenEntry(null)}

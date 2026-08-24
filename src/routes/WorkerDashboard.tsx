@@ -301,6 +301,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       {activeTab === 'submitCustomerOrder' && (
         <SubmitCustomerOrderTab
           workerId={profile.id}
+          workerName={profile.full_name}
           weekStart={weekStart}
           weekEnd={weekEnd}
           entries={weekEntries}

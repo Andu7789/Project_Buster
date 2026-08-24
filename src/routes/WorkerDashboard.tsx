@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/authContext'
 import {
+  getNextInvoiceNumberForWorker,
   getWorkerPaymentDetails,
   listClients,
   listCustomerOrdersForWorker,
@@ -231,6 +232,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
 
     setSubmitting(true)
     try {
+      const invoiceNumber = await getNextInvoiceNumberForWorker(profile.id)
       const created = await submitTimesheet({
         workerId: profile.id,
         weekStart: params.weekStart,
@@ -238,6 +240,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         dayAmounts,
         amount: total,
         ownerSharePercent: profile.owner_share_percent,
+        invoiceNumber,
       })
       setSubmissions((previous) => [created, ...previous])
       await downloadInvoicePdf(created, earningsByClient(params.entries, clients), [created, ...submissions])
@@ -272,7 +275,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       workerName: profile.full_name,
       weekStart: submission.week_start,
       weekEnd: submission.week_end,
-      invoiceNumber: invoiceNumberFor(submission, workerSubmissions),
+      invoiceNumber: submission.invoice_number ?? invoiceNumberFor(submission, workerSubmissions),
       dateIssuedIso: toISODate(new Date()),
       dateDueIso: toISODate(dueDate),
       clientTotals,

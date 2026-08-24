@@ -300,6 +300,21 @@ export async function listAllSubmissions(): Promise<Submission[]> {
   return (data ?? []) as Submission[]
 }
 
+/** The next invoice number to assign this worker's next weekly invoice - one past the highest they've already used, permanent once assigned. */
+export async function getNextInvoiceNumberForWorker(workerId: string): Promise<number> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_submissions')
+    .select('invoice_number')
+    .eq('worker_id', workerId)
+    .order('invoice_number', { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data?.invoice_number ?? 0) + 1
+}
+
 export async function submitTimesheet(input: {
   workerId: string
   weekStart: string
@@ -307,6 +322,7 @@ export async function submitTimesheet(input: {
   dayAmounts: Record<string, number>
   amount: number
   ownerSharePercent: number
+  invoiceNumber: number
   notes?: string
 }): Promise<Submission> {
   const client = requireClient()
@@ -319,6 +335,7 @@ export async function submitTimesheet(input: {
       day_amounts: input.dayAmounts,
       amount: input.amount,
       owner_share_percent: input.ownerSharePercent,
+      invoice_number: input.invoiceNumber,
       notes: input.notes || null,
     })
     .select('*')

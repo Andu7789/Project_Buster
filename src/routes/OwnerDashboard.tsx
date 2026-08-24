@@ -832,7 +832,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       workerName: workers.find((worker) => worker.id === submission.worker_id)?.full_name ?? 'Unknown worker',
       weekStart: submission.week_start,
       weekEnd: submission.week_end,
-      invoiceNumber: invoiceNumberFor(submission, workerSubmissions),
+      invoiceNumber: submission.invoice_number ?? invoiceNumberFor(submission, workerSubmissions),
       dateIssuedIso: toISODate(new Date()),
       dateDueIso: toISODate(dueDate),
       clientTotals,

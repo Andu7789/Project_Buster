@@ -49,12 +49,12 @@ export function clientPayoutTotal(entries: SaleEntry[], client: Client | undefin
 }
 
 /**
- * A stable per-worker invoice number for a weekly submission - its 1-based
- * position among that worker's own submissions, oldest week first. Derived
- * rather than stored so it needs no schema/migration, at the cost of
- * shifting if an earlier submission is later deleted (acceptable for this
- * small internal app - the owner dashboard already deletes submissions
- * outright with no other numbering/audit trail either).
+ * Fallback invoice number for a submission with no invoice_number stored
+ * (only possible for a row that predates that column and, for some reason,
+ * missed the backfill migration) - its 1-based position among that worker's
+ * own submissions, oldest week first. submission.invoice_number itself is
+ * the source of truth wherever it's set, since it's assigned once and never
+ * recomputed, unlike this derived fallback.
  */
 export function invoiceNumberFor(submission: Submission, workerSubmissions: Submission[]): number {
   const ordered = [...workerSubmissions].sort((a, b) => a.week_start.localeCompare(b.week_start))

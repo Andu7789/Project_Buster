@@ -46,6 +46,29 @@ create table if not exists buster_submissions (
 alter table buster_submissions add column if not exists paid boolean not null default false;
 alter table buster_submissions add column if not exists paid_at timestamptz;
 
+-- Migration: permanent per-worker invoice numbering, replacing the app's
+-- previous derive-on-the-fly numbering (a submission's position among that
+-- worker's own rows) so a number never shifts if an earlier submission is
+-- later deleted. Backfill assigns historical numbers per worker, oldest
+-- week first, only to rows that don't have one yet - the app itself assigns
+-- invoice_number explicitly at submit time going forward, so once every
+-- existing row is backfilled this update matches zero rows and is a no-op
+-- on re-run.
+alter table buster_submissions add column if not exists invoice_number integer;
+
+with ranked as (
+  select id, row_number() over (partition by worker_id order by week_start asc) as rn
+  from buster_submissions
+  where invoice_number is null
+)
+update buster_submissions s
+set invoice_number = ranked.rn
+from ranked
+where s.id = ranked.id;
+
+alter table buster_submissions drop constraint if exists buster_submissions_worker_invoice_number_key;
+alter table buster_submissions add constraint buster_submissions_worker_invoice_number_key unique (worker_id, invoice_number);
+
 create table if not exists buster_clients (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,

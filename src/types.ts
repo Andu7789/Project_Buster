@@ -31,6 +31,7 @@ export interface Submission {
   dealt_with: boolean
   paid: boolean
   paid_at: string | null
+  invoice_number: number | null
   notes: string | null
   created_at: string
 }

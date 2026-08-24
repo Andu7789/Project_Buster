@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal } from './Modal'
 import { upsertCustomerOrder } from '../data/queries'
-import { customOrderTypeLabel, customOrderTypes } from '../lib/customerOrders'
+import { customOrderTypeLabel, customOrderTypes, customOrderTypesNeedingDetail } from '../lib/customerOrders'
 import type { CustomerOrder, CustomOrderType, SaleEntry } from '../types'
 
 function YesNoField({
@@ -60,7 +60,7 @@ export function CustomerOrderModal({
       setError('Choose a type of custom.')
       return
     }
-    if (customType === 'panties_other' && !customTypeOther.trim()) {
+    if (customOrderTypesNeedingDetail.includes(customType) && !customTypeOther.trim()) {
       setError('Specify the type of custom.')
       return
     }
@@ -87,7 +87,7 @@ export function CustomerOrderModal({
         saleEntryId: entry.id,
         workerId,
         customType,
-        customTypeOther: customType === 'panties_other' ? customTypeOther.trim() : null,
+        customTypeOther: customOrderTypesNeedingDetail.includes(customType) ? customTypeOther.trim() : null,
         profileLink,
         customInfo,
         pinnedMessages,
@@ -122,7 +122,7 @@ export function CustomerOrderModal({
           </select>
         </label>
 
-        {customType === 'panties_other' && (
+        {customType !== '' && customOrderTypesNeedingDetail.includes(customType) && (
           <label>
             Specify the type of custom
             <input

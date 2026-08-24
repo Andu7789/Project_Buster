@@ -1,13 +1,23 @@
 import type { CustomerOrder, CustomOrderType } from '../types'
 
-export const customOrderTypes: CustomOrderType[] = ['custom_vid', 'custom_pics', 'video_cock_rate', 'panties_other']
+export const customOrderTypes: CustomOrderType[] = [
+  'custom_vid',
+  'custom_pics',
+  'video_cock_rate',
+  'panties_other',
+  'other',
+]
 
 export const customOrderTypeLabel: Record<CustomOrderType, string> = {
   custom_vid: 'Custom vid',
   custom_pics: 'Custom pics',
   video_cock_rate: 'Video cock rate',
   panties_other: 'Panties & other',
+  other: 'Other',
 }
+
+/** Types that reveal a free-text "specify" field on the form. */
+export const customOrderTypesNeedingDetail: CustomOrderType[] = ['panties_other', 'other']
 
 /** Field labels still missing from a customer order - empty array means the form is complete. */
 export function missingCustomerOrderFields(order: CustomerOrder | undefined): string[] {
@@ -15,7 +25,7 @@ export function missingCustomerOrderFields(order: CustomerOrder | undefined): st
 
   if (!order?.custom_type) {
     missing.push('Type of custom')
-  } else if (order.custom_type === 'panties_other' && !order.custom_type_other?.trim()) {
+  } else if (customOrderTypesNeedingDetail.includes(order.custom_type) && !order.custom_type_other?.trim()) {
     missing.push('Type of custom (specify)')
   }
 

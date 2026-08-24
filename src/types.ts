@@ -86,7 +86,7 @@ export interface SaleEntry {
   created_at: string
 }
 
-export type CustomOrderType = 'custom_vid' | 'custom_pics' | 'video_cock_rate' | 'panties_other'
+export type CustomOrderType = 'custom_vid' | 'custom_pics' | 'video_cock_rate' | 'panties_other' | 'other'
 
 /** One per 'customs'-section SaleEntry - the intake form a worker fills in for each custom before they can submit. */
 export interface CustomerOrder {

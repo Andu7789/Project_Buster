@@ -152,6 +152,12 @@ create table if not exists buster_customer_orders (
   updated_at timestamptz not null default now()
 );
 
+-- Migration: add a plain 'other' type alongside 'panties_other' - both reveal
+-- the same free-text "specify" field on the form. Safe to re-run.
+alter table buster_customer_orders drop constraint if exists buster_customer_orders_custom_type_check;
+alter table buster_customer_orders add constraint buster_customer_orders_custom_type_check
+  check (custom_type in ('custom_vid', 'custom_pics', 'video_cock_rate', 'panties_other', 'other'));
+
 -- Free-standing reminders/events on a calendar day, unrelated to sale
 -- entries (e.g. "Client meeting", "Payday") - owner-only, never surfaced to
 -- workers or learners.

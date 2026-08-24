@@ -108,8 +108,6 @@ export function CustomerOrderModal({
           buyerUsername: entry.buyer_username,
           profileLink: profileLink.trim(),
           customInfo: customInfo.trim(),
-          pinnedMessages,
-          addedToWaitingList,
         })
       }
       onClose()

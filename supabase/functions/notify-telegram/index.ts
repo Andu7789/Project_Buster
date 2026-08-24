@@ -37,8 +37,6 @@ interface NotifyPayload {
   buyerUsername?: string
   profileLink?: string
   customInfo?: string
-  pinnedMessages?: boolean
-  addedToWaitingList?: boolean
 }
 
 const typeLabels: Record<string, string> = { bug: 'Bug', feature: 'Feature idea', billing: 'Charge request' }
@@ -71,15 +69,12 @@ function buildMessage(payload: NotifyPayload): string {
   }
 
   if (payload.event === 'customer_order_completed') {
-    const yesNo = (value: boolean | undefined) => (value ? 'Yes' : 'No')
     return [
       `🎬 New custom order from ${payload.actorName}`,
       `Type: ${payload.customType ?? '—'}`,
-      `Username: ${payload.buyerUsername ?? '—'}`,
+      `Fan's name: ${payload.buyerUsername ?? '—'}`,
       `Profile link: ${payload.profileLink ?? '—'}`,
       `Details: ${payload.customInfo ?? '—'}`,
-      `Pinned messages: ${yesNo(payload.pinnedMessages)}`,
-      `Added to waiting list: ${yesNo(payload.addedToWaitingList)}`,
     ].join('\n')
   }
 

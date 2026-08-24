@@ -720,6 +720,14 @@ a:focus-visible {
   font-weight: 600;
 }
 
+/* Narrow number-only inputs (next invoice #, owner-cut %) shouldn't claim as
+   much column width as the free-text fields next to them - without this
+   they default to the browser's ~20-char input width, pushing wide tables
+   into horizontal scroll well before they need to. */
+.submission-table .gross-input {
+  width: 80px;
+}
+
 .submission-row {
   cursor: pointer;
   transition: background-color 150ms ease-out;

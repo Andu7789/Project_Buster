@@ -95,6 +95,7 @@ function clientNameForKey(key: string, clients: Client[]): string {
 }
 
 export interface ClientEarningsTotal {
+  clientId: string | null
   clientName: string
   earnings: number
 }
@@ -107,6 +108,7 @@ export function earningsByClient(entries: SaleEntry[], clients: Client[]): Clien
     totals.set(key, (totals.get(key) ?? 0) + entry.earnings)
   }
   return orderClientKeys(totals.keys(), clients).map((key) => ({
+    clientId: key === 'general' ? null : key,
     clientName: clientNameForKey(key, clients),
     earnings: totals.get(key)!,
   }))

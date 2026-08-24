@@ -1183,6 +1183,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           workerName={selectedWorker.full_name}
           entries={selectedSubmissionEntries}
           clients={clients}
+          saleTypes={saleTypes}
           onClose={() => setSelectedSubmissionId(null)}
           onConfirm={handleConfirmSubmission}
           onDelete={handleDeleteSubmission}

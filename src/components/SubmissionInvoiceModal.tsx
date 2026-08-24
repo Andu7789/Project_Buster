@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Modal } from './Modal'
+import { ClientSalesDetailModal } from './ClientSalesDetailModal'
 import { SubmissionStatusBadge } from './StatusBadge'
 import { formatCurrency, formatWeekRange } from '../lib/dates'
-import { breakdownByClientAndSection, earningsByClient, ownerCutByClient, sectionLabel } from '../lib/earnings'
-import type { Client, SaleEntry, Submission } from '../types'
+import { breakdownByClientAndSection, earningsByClient, ownerCutByClient, sectionLabel, type ClientEarningsTotal } from '../lib/earnings'
+import type { Client, SaleEntry, SaleType, Submission } from '../types'
 
 export function SubmissionInvoiceModal({
   submission,
   workerName,
   entries,
   clients,
+  saleTypes,
   onClose,
   onConfirm,
   onDelete,
@@ -18,6 +20,7 @@ export function SubmissionInvoiceModal({
   workerName: string
   entries: SaleEntry[]
   clients: Client[]
+  saleTypes: SaleType[]
   onClose: () => void
   onConfirm: (submissionId: string) => Promise<void>
   onDelete: (submissionId: string) => Promise<void>
@@ -26,6 +29,7 @@ export function SubmissionInvoiceModal({
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [selectedClient, setSelectedClient] = useState<ClientEarningsTotal | null>(null)
 
   const breakdown = useMemo(() => breakdownByClientAndSection(entries, clients), [entries, clients])
   const clientTotals = useMemo(() => earningsByClient(entries, clients), [entries, clients])
@@ -80,6 +84,7 @@ export function SubmissionInvoiceModal({
       </div>
 
       <h3>Earnings by client</h3>
+      <p className="modal-subtitle">Click a client to see the individual sales behind their total.</p>
       <table className="detail-table">
         <thead>
           <tr>
@@ -89,7 +94,7 @@ export function SubmissionInvoiceModal({
         </thead>
         <tbody>
           {clientTotals.map((row) => (
-            <tr key={row.clientName}>
+            <tr key={row.clientName} className="submission-row" onClick={() => setSelectedClient(row)}>
               <td>{row.clientName}</td>
               <td>{formatCurrency(row.earnings)}</td>
             </tr>
@@ -188,6 +193,16 @@ export function SubmissionInvoiceModal({
           </button>
         )}
       </div>
+
+      {selectedClient && (
+        <ClientSalesDetailModal
+          clientName={selectedClient.clientName}
+          weekLabel={weekLabel}
+          entries={entries.filter((entry) => (entry.client_id ?? null) === selectedClient.clientId)}
+          saleTypes={saleTypes}
+          onClose={() => setSelectedClient(null)}
+        />
+      )}
     </Modal>
   )
 }

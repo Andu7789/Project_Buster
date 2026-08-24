@@ -8,27 +8,18 @@ import {
 import { daysOfWeek } from '../../lib/dates'
 import type { Client, DayShift, Profile, TimetableShift } from '../../types'
 
-const defaultShift: DayShift = { start: '09:00', end: '17:00' }
-
+/** Blank start and end (rather than a separate Off toggle) means the day is off. */
 function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (value: DayShift | undefined) => void }) {
-  const isOff = !value
+  function commit(start: string, end: string) {
+    onChange(start || end ? { start, end } : undefined)
+  }
 
   return (
     <div className="timetable-day-cell">
-      <label className="timetable-off-toggle">
-        <input
-          type="checkbox"
-          checked={isOff}
-          onChange={(event) => onChange(event.target.checked ? undefined : defaultShift)}
-        />
-        Off
-      </label>
-      {!isOff && (
-        <div className="timetable-time-inputs">
-          <input type="time" value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} />
-          <input type="time" value={value.end} onChange={(event) => onChange({ ...value, end: event.target.value })} />
-        </div>
-      )}
+      <div className="timetable-time-inputs">
+        <input type="time" value={value?.start ?? ''} onChange={(event) => commit(event.target.value, value?.end ?? '')} />
+        <input type="time" value={value?.end ?? ''} onChange={(event) => commit(value?.start ?? '', event.target.value)} />
+      </div>
     </div>
   )
 }
@@ -47,6 +38,7 @@ function TimetableRow({
   const [draft, setDraft] = useState<Record<string, DayShift>>(row.shifts)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function setDay(day: string, value: DayShift | undefined) {
@@ -57,6 +49,7 @@ function TimetableRow({
       return next
     })
     setDirty(true)
+    setSaved(false)
   }
 
   async function handleSave() {
@@ -65,6 +58,7 @@ function TimetableRow({
     try {
       await onSave(row.id, draft)
       setDirty(false)
+      setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save this row.')
     } finally {
@@ -90,6 +84,7 @@ function TimetableRow({
           </button>
         </div>
         {error && <p className="message message-error">{error}</p>}
+        {saved && !error && <p className="message message-info">Saved.</p>}
       </td>
     </tr>
   )

@@ -981,21 +981,6 @@ a:focus-visible {
   min-width: 130px;
 }
 
-.timetable-off-toggle {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  font-size: 0.82rem;
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
-
-.timetable-off-toggle input {
-  width: auto;
-}
-
 .timetable-time-inputs {
   display: flex;
   gap: 6px;

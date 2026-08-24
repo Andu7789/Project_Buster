@@ -1,9 +1,10 @@
-export type WorkerTabId = 'earnings' | 'submitCustomerOrder' | 'workTimetable'
+export type WorkerTabId = 'earnings' | 'submitCustomerOrder' | 'workTimetable' | 'paymentDetails'
 
 const tabs: { id: WorkerTabId; label: string }[] = [
   { id: 'earnings', label: 'Earnings' },
   { id: 'submitCustomerOrder', label: 'Submit Customer Order' },
   { id: 'workTimetable', label: 'Work Timetable' },
+  { id: 'paymentDetails', label: 'Payment Details' },
 ]
 
 export function TabNav({ active, onChange }: { active: WorkerTabId; onChange: (id: WorkerTabId) => void }) {

@@ -112,6 +112,20 @@ create table if not exists buster_payment_methods (
 insert into buster_payment_methods (method) values ('bank'), ('wise'), ('paypal')
 on conflict (method) do nothing;
 
+-- A worker's own payout details - where the owner pays *them*, as opposed to
+-- buster_payment_methods above (the owner's own fixed 3 rows, where clients
+-- pay the owner). One row per worker, worker-managed via the "Payment
+-- Details" tab on their own portal - unlike buster_payment_methods' fixed
+-- set of 3 method rows, a worker picks a single method and only that
+-- method's fields are ever written to `details`.
+create table if not exists buster_worker_payment_details (
+  id uuid primary key default gen_random_uuid(),
+  worker_id uuid not null unique references buster_profiles(id),
+  method text not null check (method in ('bank', 'wise', 'paypal')),
+  details jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists buster_sale_types (
   id uuid primary key default gen_random_uuid(),
   label text not null unique,
@@ -472,6 +486,7 @@ alter table buster_owner_submission_items enable row level security;
 alter table buster_owner_submissions enable row level security;
 alter table buster_owner_submission_invoices enable row level security;
 alter table buster_payment_methods enable row level security;
+alter table buster_worker_payment_details enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -547,6 +562,30 @@ drop policy if exists "owner manages" on buster_payment_methods;
 create policy "owner manages" on buster_payment_methods for all
   using (buster_is_owner())
   with check (buster_is_owner());
+
+-- buster_worker_payment_details policies - a worker fully owns their own row
+-- (insert/select/update); the owner can read every row (needed to actually
+-- pay workers) but never writes one - same "don't let anyone but the owner
+-- of the data edit it" philosophy as buster_training_progress.
+drop policy if exists "worker inserts own" on buster_worker_payment_details;
+create policy "worker inserts own" on buster_worker_payment_details for insert
+  with check (
+    worker_id in (
+      select id from buster_profiles where auth_user_id = auth.uid() and status = 'active'
+    )
+  );
+
+drop policy if exists "worker reads own, owner reads all" on buster_worker_payment_details;
+create policy "worker reads own, owner reads all" on buster_worker_payment_details for select
+  using (
+    worker_id in (select id from buster_profiles where auth_user_id = auth.uid())
+    or buster_is_owner()
+  );
+
+drop policy if exists "worker updates own" on buster_worker_payment_details;
+create policy "worker updates own" on buster_worker_payment_details for update
+  using (worker_id in (select id from buster_profiles where auth_user_id = auth.uid()))
+  with check (worker_id in (select id from buster_profiles where auth_user_id = auth.uid()));
 
 -- buster_sale_entries policies
 drop policy if exists "worker inserts own" on buster_sale_entries;

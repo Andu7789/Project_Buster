@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/authContext'
 import {
+  getWorkerPaymentDetails,
   listClients,
   listCustomerOrdersForWorker,
   listSaleEntriesForWorker,
   listSaleTypes,
   listSubmissionsForWorker,
   submitTimesheet,
+  upsertWorkerPaymentDetails,
 } from '../data/queries'
 import {
   daysOfWeek,
@@ -18,13 +20,14 @@ import {
 } from '../lib/dates'
 import { breakdownByClientAndSection, earningsByClient } from '../lib/earnings'
 import { missingCustomerOrderFields } from '../lib/customerOrders'
-import type { Client, CustomerOrder, Profile, SaleEntry, SaleType, Submission } from '../types'
+import type { Client, CustomerOrder, PaymentMethodType, Profile, SaleEntry, SaleType, Submission, WorkerPaymentDetails } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { MissingCustomerOrdersModal, type MissingCustomerOrderRow } from '../components/MissingCustomerOrdersModal'
 import { TabNav, type WorkerTabId } from './WorkerDashboard/TabNav'
 import { EarningsTab } from './WorkerDashboard/EarningsTab'
 import { SubmitCustomerOrderTab } from './WorkerDashboard/SubmitCustomerOrderTab'
 import { WorkTimetableTab } from './WorkerDashboard/WorkTimetableTab'
+import { PaymentDetailsTab } from './WorkerDashboard/PaymentDetailsTab'
 
 export function WorkerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
@@ -35,6 +38,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
   const [previousWeekEntries, setPreviousWeekEntries] = useState<SaleEntry[]>([])
   const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([])
+  const [paymentDetails, setPaymentDetails] = useState<WorkerPaymentDetails | null>(null)
   const [loadingSubmissions, setLoadingSubmissions] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -62,8 +66,9 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         ? listSaleEntriesForWorker(profile.id, previousWeek.weekStart, previousWeek.weekEnd)
         : Promise.resolve([]),
       listCustomerOrdersForWorker(profile.id),
+      getWorkerPaymentDetails(profile.id),
     ])
-      .then(([submissionData, clientData, saleTypeData, entryData, previousEntryData, customerOrderData]) => {
+      .then(([submissionData, clientData, saleTypeData, entryData, previousEntryData, customerOrderData, paymentDetailsData]) => {
         if (cancelled) return
         setSubmissions(submissionData)
         setClients(clientData)
@@ -71,6 +76,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         setWeekEntries(entryData)
         setPreviousWeekEntries(previousEntryData)
         setCustomerOrders(customerOrderData)
+        setPaymentDetails(paymentDetailsData)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load your timesheets.')
@@ -174,6 +180,11 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       next[existingIndex] = order
       return next
     })
+  }
+
+  async function handleSavePaymentDetails(method: PaymentMethodType, details: Record<string, string>) {
+    const saved = await upsertWorkerPaymentDetails({ workerId: profile.id, method, details })
+    setPaymentDetails(saved)
   }
 
   function findMissingCustomerOrders(entries: SaleEntry[]): MissingCustomerOrderRow[] {
@@ -317,6 +328,10 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       )}
 
       {activeTab === 'workTimetable' && <WorkTimetableTab />}
+
+      {activeTab === 'paymentDetails' && (
+        <PaymentDetailsTab paymentDetails={paymentDetails} onSave={handleSavePaymentDetails} />
+      )}
 
       {missingOrderRows && (
         <MissingCustomerOrdersModal

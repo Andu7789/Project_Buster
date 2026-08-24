@@ -64,6 +64,15 @@ export interface PaymentMethod {
   updated_at: string
 }
 
+/** A worker's own payout details - where the owner pays them. One row per worker, worker-managed. */
+export interface WorkerPaymentDetails {
+  id: string
+  worker_id: string
+  method: PaymentMethodType
+  details: Record<string, string>
+  updated_at: string
+}
+
 export interface SaleType {
   id: string
   label: string

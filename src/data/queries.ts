@@ -23,6 +23,7 @@ import type {
   SaleType,
   Submission,
   TrainingProgress,
+  WorkerPaymentDetails,
 } from '../types'
 
 function requireClient() {
@@ -451,6 +452,42 @@ export async function updatePaymentMethodDetails(method: PaymentMethodType, deta
 
   if (error) throw error
   return data as PaymentMethod
+}
+
+export async function getWorkerPaymentDetails(workerId: string): Promise<WorkerPaymentDetails | null> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_worker_payment_details')
+    .select('*')
+    .eq('worker_id', workerId)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as WorkerPaymentDetails) ?? null
+}
+
+export async function upsertWorkerPaymentDetails(input: {
+  workerId: string
+  method: PaymentMethodType
+  details: Record<string, string>
+}): Promise<WorkerPaymentDetails> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_worker_payment_details')
+    .upsert(
+      {
+        worker_id: input.workerId,
+        method: input.method,
+        details: input.details,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'worker_id' },
+    )
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as WorkerPaymentDetails
 }
 
 export async function listSaleTypes(): Promise<SaleType[]> {

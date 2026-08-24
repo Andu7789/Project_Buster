@@ -334,6 +334,16 @@ export async function markDealtWith(submissionId: string): Promise<void> {
   if (error) throw error
 }
 
+/** Marks a worker's weekly invoice as paid - moves it from "Pending payment" to "Paid invoices" on the owner side. */
+export async function markSubmissionPaid(submissionId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client
+    .from('buster_submissions')
+    .update({ paid: true, paid_at: new Date().toISOString() })
+    .eq('id', submissionId)
+  if (error) throw error
+}
+
 /**
  * Permanently deletes a submission and its underlying buster_sale_entries
  * (same worker, same week) via the buster_delete_submission() RPC - see
@@ -466,6 +476,14 @@ export async function getWorkerPaymentDetails(workerId: string): Promise<WorkerP
 
   if (error) throw error
   return (data as WorkerPaymentDetails) ?? null
+}
+
+/** Owner-side: every worker's payment details in one query, for invoice PDFs and payroll review. */
+export async function listAllWorkerPaymentDetails(): Promise<WorkerPaymentDetails[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_worker_payment_details').select('*')
+  if (error) throw error
+  return (data ?? []) as WorkerPaymentDetails[]
 }
 
 export async function upsertWorkerPaymentDetails(input: {
@@ -1095,7 +1113,7 @@ export async function getScreenshotSignedUrls(paths: string[]): Promise<Record<s
  * blocks the request/comment/status-update it's reporting on.
  */
 export async function notifyTelegram(
-  event: 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed',
+  event: 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed' | 'worker_invoice_created',
   payload: Record<string, unknown>,
 ): Promise<void> {
   const client = requireClient()

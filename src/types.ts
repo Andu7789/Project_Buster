@@ -29,6 +29,8 @@ export interface Submission {
   amount: number
   owner_share_percent: number
   dealt_with: boolean
+  paid: boolean
+  paid_at: string | null
   notes: string | null
   created_at: string
 }

@@ -2,7 +2,7 @@ import { DayEntryModal } from '../../components/DayEntryModal'
 import { HoverEffectGrid } from '../../components/HoverEffect/HoverEffectGrid'
 import { HoverEffectItem } from '../../components/HoverEffect/HoverEffectItem'
 import { Modal } from '../../components/Modal'
-import { SubmissionStatusBadge } from '../../components/StatusBadge'
+import { PaidStatusBadge, SubmissionStatusBadge } from '../../components/StatusBadge'
 import { daysOfWeek, formatCurrency, formatWeekRange } from '../../lib/dates'
 import { sectionLabel, type ClientEarningsTotal, type ClientSectionBreakdownRow } from '../../lib/earnings'
 import type { Client, SaleEntry, SaleType, Submission } from '../../types'
@@ -139,6 +139,7 @@ export function EarningsTab({
   selectedSubmissionClientTotals,
   selectedSubmissionBreakdown,
   onCloseSubmissionModal,
+  onDownloadInvoice,
 
   selectedDate,
   workerId,
@@ -184,6 +185,7 @@ export function EarningsTab({
   selectedSubmissionClientTotals: ClientEarningsTotal[]
   selectedSubmissionBreakdown: ClientSectionBreakdownRow[]
   onCloseSubmissionModal: () => void
+  onDownloadInvoice: (submission: Submission, clientTotals: ClientEarningsTotal[]) => void
 
   selectedDate: string | null
   workerId: string
@@ -213,7 +215,7 @@ export function EarningsTab({
         liveTotal={liveTotal}
         totalLabel="Current week total"
         onDayClick={onDayClick}
-        submitLabel="Submit earnings"
+        submitLabel="Create & send weekly invoice"
         onSubmit={onSubmit}
         submitting={submitting}
         showSubmit={!alreadySubmittedThisWeek}
@@ -231,7 +233,7 @@ export function EarningsTab({
           liveTotal={previousLiveTotal}
           totalLabel="Last week total"
           onDayClick={onDayClick}
-          submitLabel="Submit last week's earnings"
+          submitLabel="Create & send last week's invoice"
           onSubmit={onSubmitLastWeek}
           submitting={submitting}
           showSubmit
@@ -264,6 +266,7 @@ export function EarningsTab({
                   <th>Week</th>
                   <th>Total</th>
                   <th>Status</th>
+                  <th>Payment</th>
                 </tr>
               </thead>
               <tbody>
@@ -274,12 +277,15 @@ export function EarningsTab({
                     <td>
                       <SubmissionStatusBadge dealtWith={submission.dealt_with} />
                     </td>
+                    <td>
+                      <PaidStatusBadge paid={submission.paid} />
+                    </td>
                   </tr>
                 ))}
                 {submissions.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="empty-row">
-                      No timesheets submitted yet.
+                    <td colSpan={4} className="empty-row">
+                      No invoices submitted yet.
                     </td>
                   </tr>
                 )}
@@ -290,7 +296,7 @@ export function EarningsTab({
       </section>
 
       {selectedSubmission && (
-        <Modal title="Timesheet detail" onClose={onCloseSubmissionModal}>
+        <Modal title="Invoice detail" onClose={onCloseSubmissionModal}>
           <p className="modal-subtitle">{formatWeekRange(selectedSubmission.week_start, selectedSubmission.week_end)}</p>
           <div className="detail-summary">
             <div>
@@ -303,7 +309,21 @@ export function EarningsTab({
                 <SubmissionStatusBadge dealtWith={selectedSubmission.dealt_with} />
               </strong>
             </div>
+            <div>
+              <p className="label">Payment</p>
+              <strong>
+                <PaidStatusBadge paid={selectedSubmission.paid} />
+              </strong>
+            </div>
           </div>
+
+          <button
+            type="button"
+            className="btn-outline"
+            onClick={() => onDownloadInvoice(selectedSubmission, selectedSubmissionClientTotals)}
+          >
+            Download invoice PDF
+          </button>
 
           <table className="detail-table">
             <thead>

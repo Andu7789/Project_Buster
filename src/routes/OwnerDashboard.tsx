@@ -16,6 +16,7 @@ import {
   deleteSubmission,
   listAllSubmissions,
   listAllTrainingProgress,
+  listAllWorkerPaymentDetails,
   listClientInvoices,
   listClients,
   listLearners,
@@ -31,6 +32,7 @@ import {
   markClientInvoiceDealtWith,
   markDealtWith,
   markOwnerSubmissionInvoiceDealtWith,
+  markSubmissionPaid,
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
@@ -47,13 +49,15 @@ import { formatCurrency, getCurrentWeekRange, getNextWeekRange, getPreviousWeekR
 import {
   calcOwnerCut,
   clientPayoutTotal,
+  earningsByClient,
+  invoiceNumberFor,
   ownerCutPercentForSection,
   PPV_OWNER_SUBMISSION_CATEGORIES,
   SEXTING_OWNER_SUBMISSION_CATEGORIES,
 } from '../lib/earnings'
 import { DEFAULT_CLIENT_COLOR, nextClientColor } from '../lib/clientColor'
 import { fetchUsdToGbpRate, type UsdToGbpRate } from '../lib/exchangeRate'
-import { generateOwnerInvoicePdf } from '../lib/invoicePdf'
+import { generateOwnerInvoicePdf, generateWorkerInvoicePdf } from '../lib/invoicePdf'
 import { paymentMethodFields, paymentMethodLabel } from '../lib/paymentMethods'
 import type {
   Client,
@@ -71,6 +75,7 @@ import type {
   SaleType,
   Submission,
   TrainingProgress,
+  WorkerPaymentDetails,
 } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { StatCard } from '../components/StatCard'
@@ -83,6 +88,7 @@ import { TabNav, type OwnerTabId } from './OwnerDashboard/TabNav'
 import { TeamClientsSaleTypesTab } from './OwnerDashboard/TeamClientsSaleTypesTab'
 import { LearnersTrainingTab } from './OwnerDashboard/LearnersTrainingTab'
 import { SubmissionsInvoicesTab } from './OwnerDashboard/SubmissionsInvoicesTab'
+import { InvoicesTab } from './OwnerDashboard/InvoicesTab'
 import { OwnerSubmissionsTab } from './OwnerDashboard/OwnerSubmissionsTab'
 import { CalendarTab } from './OwnerDashboard/CalendarTab'
 import { WorkTimetableTab } from './OwnerDashboard/WorkTimetableTab'
@@ -103,6 +109,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [ownerSubmissionInvoices, setOwnerSubmissionInvoices] = useState<OwnerSubmissionInvoice[]>([])
   const [trainingProgress, setTrainingProgress] = useState<TrainingProgress[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [workerPaymentDetails, setWorkerPaymentDetails] = useState<WorkerPaymentDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<OwnerTabId>('submissions')
@@ -197,6 +204,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       listOwnerSubmissionInvoices(),
       listOwners(),
       listPaymentMethods(),
+      listAllWorkerPaymentDetails(),
     ])
       .then(
         ([
@@ -210,6 +218,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           ownerSubmissionInvoiceData,
           ownerData,
           paymentMethodData,
+          workerPaymentDetailsData,
         ]) => {
           if (cancelled) return
           setWorkers(workerData)
@@ -223,6 +232,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setOwnerSubmissionInvoices(ownerSubmissionInvoiceData)
           setOwners(ownerData)
           setPaymentMethods(paymentMethodData)
+          setWorkerPaymentDetails(workerPaymentDetailsData)
           setSelectedWorkerId((current) => current ?? workerData[0]?.id ?? null)
         },
       )
@@ -792,6 +802,46 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     )
   }
 
+  async function handleMarkSubmissionPaid(submissionId: string) {
+    await markSubmissionPaid(submissionId)
+    setSubmissions((previous) =>
+      previous.map((submission) =>
+        submission.id === submissionId ? { ...submission, paid: true, paid_at: new Date().toISOString() } : submission,
+      ),
+    )
+  }
+
+  async function handleDownloadWorkerInvoicePdf(submission: Submission) {
+    const entries = await listSaleEntriesForWorker(submission.worker_id, submission.week_start, submission.week_end)
+    const clientTotals = earningsByClient(entries, clients)
+    const workerSubmissions = submissions.filter((entry) => entry.worker_id === submission.worker_id)
+
+    // Weeks start Monday - the invoice is sent the following Monday, due the Wednesday of that same week.
+    const dueDate = new Date(submission.week_start)
+    dueDate.setDate(dueDate.getDate() + 2)
+
+    const details = workerPaymentDetails.find((entry) => entry.worker_id === submission.worker_id)
+    const paymentMethodLines = details
+      ? paymentMethodFields[details.method]
+          .map((field) => ({ label: field.label, value: details.details[field.key]?.trim() ?? '' }))
+          .filter((field) => field.value !== '')
+          .map((field) => `${field.label}: ${field.value}`)
+      : []
+
+    await generateWorkerInvoicePdf({
+      workerName: workers.find((worker) => worker.id === submission.worker_id)?.full_name ?? 'Unknown worker',
+      weekStart: submission.week_start,
+      weekEnd: submission.week_end,
+      invoiceNumber: invoiceNumberFor(submission, workerSubmissions),
+      dateIssuedIso: toISODate(new Date()),
+      dateDueIso: toISODate(dueDate),
+      clientTotals,
+      amount: submission.amount,
+      paymentMethodLabel: details ? paymentMethodLabel[details.method] : null,
+      paymentMethodLines,
+    })
+  }
+
   async function handleDeleteSubmission(submissionId: string) {
     const submission = submissions.find((entry) => entry.id === submissionId)
     await deleteSubmission(submissionId)
@@ -1148,6 +1198,15 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               selectedClientId={selectedClientId}
               onSelectClient={setSelectedClientId}
               onViewInvoice={(invoiceId) => setViewedInvoiceId(invoiceId)}
+            />
+          )}
+
+          {activeTab === 'invoices' && (
+            <InvoicesTab
+              submissions={submissions}
+              workers={workers}
+              onDownloadInvoice={handleDownloadWorkerInvoicePdf}
+              onMarkPaid={handleMarkSubmissionPaid}
             />
           )}
 

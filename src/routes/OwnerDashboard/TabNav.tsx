@@ -2,6 +2,7 @@ export type OwnerTabId =
   | 'team'
   | 'learners'
   | 'submissions'
+  | 'invoices'
   | 'ownerSubmissions'
   | 'calendar'
   | 'timetable'
@@ -10,6 +11,7 @@ export type OwnerTabId =
 
 const tabs: { id: OwnerTabId; label: string }[] = [
   { id: 'submissions', label: 'Submissions & Invoices' },
+  { id: 'invoices', label: 'Worker Invoices' },
   { id: 'ownerSubmissions', label: 'PM Sales' },
   { id: 'team', label: 'Teams, Clients & Sale Types' },
   { id: 'calendar', label: 'Calendar' },

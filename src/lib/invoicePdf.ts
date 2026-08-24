@@ -353,3 +353,121 @@ export async function generateOwnerInvoicePdf(input: {
 
   doc.save(`owner-invoice-${input.clientName.replace(/\s+/g, '-').toLowerCase()}-${input.weekStart}.pdf`)
 }
+
+/** The business name a worker's invoice is addressed to - fixed, matches the paper template this mirrors. */
+const CONTRACTOR_INVOICE_RECIPIENT = 'Savannah Assistant Services'
+
+/**
+ * A worker's own weekly invoice PDF - generated client-side when they submit
+ * their timesheet (so they have a copy for their own records) and re-downloadable
+ * later from either the worker's or owner's invoice history. Wording and field
+ * order mirror the paper subcontractor-invoice template this replaces.
+ * Deliberately plain compared to generateOwnerInvoicePdf() above - no branding
+ * assets, just the figures the worker already sees on-screen.
+ */
+export async function generateWorkerInvoicePdf(input: {
+  workerName: string
+  weekStart: string
+  weekEnd: string
+  invoiceNumber: number
+  dateIssuedIso: string
+  dateDueIso: string
+  clientTotals: { clientName: string; earnings: number }[]
+  amount: number
+  paymentMethodLabel: string | null
+  paymentMethodLines: string[]
+}): Promise<void> {
+  const doc = new jsPDF()
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(28)
+  doc.setTextColor(...PINK)
+  doc.text('INVOICE', 14, 24)
+  doc.setTextColor(...INK)
+
+  drawField(doc, 'From:', input.workerName, 14, 42, 85)
+  drawField(doc, 'To:', CONTRACTOR_INVOICE_RECIPIENT, 110, 42, 86)
+
+  drawField(doc, 'Invoice Number:', `#${input.invoiceNumber}`, 14, 60, 56)
+  drawField(doc, 'Invoice Date:', formatDate(input.dateIssuedIso), 76, 60, 56)
+  drawField(doc, 'Payment Due:', formatDate(input.dateDueIso), 140, 60, 56)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text('Description of Services', 14, 86)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...INK_MUTED)
+  doc.text(`Administrative support services provided to ${CONTRACTOR_INVOICE_RECIPIENT}`, 14, 93)
+  doc.text(`For the period: ${formatDate(input.weekStart)} - ${formatDate(input.weekEnd)}`, 14, 99)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text('Earnings by client', 14, 113)
+
+  let y: number
+  if (input.clientTotals.length === 0) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...INK_MUTED)
+    doc.text('No entries recorded for this period.', 14, 120)
+    y = 128
+  } else {
+    autoTable(doc, {
+      startY: 118,
+      head: [['Client', 'Amount']],
+      body: input.clientTotals.map((row) => [row.clientName, formatUsd(row.earnings)]),
+      styles: { fontSize: 10, textColor: INK },
+      headStyles: { fillColor: PINK_LIGHT, textColor: INK, fontStyle: 'bold' },
+    })
+    y = lastAutoTableY(doc) + 10
+  }
+
+  y = ensureSpace(doc, y, 16)
+  doc.setFillColor(...PINK_LIGHT)
+  doc.setDrawColor(...PINK)
+  doc.rect(14, y - 6, 182, 12, 'FD')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text(`Total amount due to Contractor: ${formatUsd(input.amount)}`, 18, y + 2)
+  y += 20
+
+  y = ensureSpace(doc, y, 30)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text('Payment Details', 14, y)
+  y += 8
+
+  doc.setFontSize(9)
+  if (input.paymentMethodLabel) {
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...INK)
+    doc.text(input.paymentMethodLabel, 14, y)
+    y += 6
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...INK_MUTED)
+    for (const line of input.paymentMethodLines) {
+      doc.text(line, 14, y)
+      y += 5
+    }
+  } else {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...INK_MUTED)
+    doc.text('Not set', 14, y)
+    y += 6
+  }
+
+  y = ensureSpace(doc, y, 18)
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.35)
+  doc.line(14, y + 4, 196, y + 4)
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(8)
+  doc.setTextColor(...INK_MUTED)
+  doc.text('This invoice represents subcontracted services under agreement.', 14, y + 11)
+
+  doc.save(`${input.workerName.replace(/\s+/g, '-')}-Invoice-${input.invoiceNumber}.pdf`)
+}

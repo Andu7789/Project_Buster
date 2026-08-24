@@ -27,6 +27,10 @@ export function SubmissionStatusBadge({ dealtWith }: { dealtWith: boolean }) {
   )
 }
 
+export function PaidStatusBadge({ paid }: { paid: boolean }) {
+  return paid ? <StatusBadge tone="success">Paid</StatusBadge> : <StatusBadge tone="warning">Unpaid</StatusBadge>
+}
+
 export function CustomerOrderStatusBadge({ complete }: { complete: boolean }) {
   return complete ? <StatusBadge tone="success">Complete</StatusBadge> : <StatusBadge tone="danger">Incomplete</StatusBadge>
 }

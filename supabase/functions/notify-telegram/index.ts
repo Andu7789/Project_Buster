@@ -14,7 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-type NotifyEvent = 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed'
+type NotifyEvent = 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed' | 'worker_invoice_created'
 
 interface NotifyPayload {
   event: NotifyEvent
@@ -37,6 +37,10 @@ interface NotifyPayload {
   buyerUsername?: string
   profileLink?: string
   customInfo?: string
+  // worker_invoice_created
+  weekStart?: string
+  weekEnd?: string
+  amount?: number
 }
 
 const typeLabels: Record<string, string> = { bug: 'Bug', feature: 'Feature idea', billing: 'Charge request' }
@@ -66,6 +70,14 @@ function buildMessage(payload: NotifyPayload): string {
       return `✅ "${title}" marked complete${payload.resolutionNotes ? `\n${payload.resolutionNotes}` : ''}`
     }
     return `🔄 "${title}" is now ${status.toLowerCase()} (${payload.progress ?? 0}%)`
+  }
+
+  if (payload.event === 'worker_invoice_created') {
+    return [
+      `🧾 New weekly invoice from ${payload.actorName}`,
+      `Week: ${payload.weekStart ?? '—'} to ${payload.weekEnd ?? '—'}`,
+      `Total: $${(payload.amount ?? 0).toFixed(2)}`,
+    ].join('\n')
   }
 
   if (payload.event === 'customer_order_completed') {
@@ -172,6 +184,47 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: client.telegram_chat_id, text }),
+      })
+
+      if (!telegramResponse.ok) {
+        const detail = await telegramResponse.text()
+        console.error('Telegram API error:', detail)
+        return new Response(JSON.stringify({ error: 'Telegram API error', detail }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (payload.event === 'worker_invoice_created') {
+      // Any active worker (or owner) can trigger this - always goes to the
+      // owner's own chat, never the caller's choice.
+      if (!['worker', 'owner'].includes(profile.role)) {
+        return new Response(JSON.stringify({ error: 'Not authorized' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+      const ownerChatId = Deno.env.get('TELEGRAM_OWNER_CHAT_ID')
+      if (!botToken || !ownerChatId) {
+        console.error('Telegram secrets not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_OWNER_CHAT_ID)')
+        return new Response(JSON.stringify({ error: 'Telegram is not configured' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const text = buildMessage(payload)
+      const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: ownerChatId, text }),
       })
 
       if (!telegramResponse.ok) {

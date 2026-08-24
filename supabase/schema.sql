@@ -39,6 +39,13 @@ create table if not exists buster_submissions (
   unique (worker_id, week_start)
 );
 
+-- Migration: payment tracking on a worker's weekly invoice. Separate from
+-- dealt_with (which just means the owner has reviewed/agreed the submitted
+-- figures) - paid is set once the owner has actually sent the money, and
+-- moves the invoice into the owner's "Paid invoices" list.
+alter table buster_submissions add column if not exists paid boolean not null default false;
+alter table buster_submissions add column if not exists paid_at timestamptz;
+
 create table if not exists buster_clients (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,

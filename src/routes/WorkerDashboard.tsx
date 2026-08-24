@@ -7,9 +7,11 @@ import {
   listSaleEntriesForWorker,
   listSaleTypes,
   listSubmissionsForWorker,
+  notifyTelegram,
   submitTimesheet,
   upsertWorkerPaymentDetails,
 } from '../data/queries'
+import { generateWorkerInvoicePdf } from '../lib/invoicePdf'
 import {
   daysOfWeek,
   formatDayLabel,
@@ -17,9 +19,11 @@ import {
   getPreviousWeekRange,
   getWeekDates,
   isWithinGracePeriod,
+  toISODate,
 } from '../lib/dates'
-import { breakdownByClientAndSection, earningsByClient } from '../lib/earnings'
+import { breakdownByClientAndSection, earningsByClient, invoiceNumberFor, type ClientEarningsTotal } from '../lib/earnings'
 import { missingCustomerOrderFields } from '../lib/customerOrders'
+import { paymentMethodFields, paymentMethodLabel } from '../lib/paymentMethods'
 import type { Client, CustomerOrder, PaymentMethodType, Profile, SaleEntry, SaleType, Submission, WorkerPaymentDetails } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
 import { MissingCustomerOrdersModal, type MissingCustomerOrderRow } from '../components/MissingCustomerOrdersModal'
@@ -236,12 +240,46 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
         ownerSharePercent: profile.owner_share_percent,
       })
       setSubmissions((previous) => [created, ...previous])
-      setMessage('Weekly submission sent to your employer.')
+      await downloadInvoicePdf(created, earningsByClient(params.entries, clients), [created, ...submissions])
+      void notifyTelegram('worker_invoice_created', {
+        actorName: profile.full_name,
+        weekStart: created.week_start,
+        weekEnd: created.week_end,
+        amount: created.amount,
+      })
+      setMessage('Weekly invoice sent to your employer and saved to your downloads.')
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not submit your timesheet.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function downloadInvoicePdf(submission: Submission, clientTotals: ClientEarningsTotal[], workerSubmissions: Submission[]) {
+    // Weeks start Monday - the invoice is sent the following Monday, due the Wednesday of that same week.
+    const dueDate = new Date(submission.week_start)
+    dueDate.setDate(dueDate.getDate() + 2)
+
+    const method = paymentDetails?.method ?? null
+    const paymentMethodLines = method
+      ? paymentMethodFields[method]
+          .map((field) => ({ label: field.label, value: paymentDetails?.details[field.key]?.trim() ?? '' }))
+          .filter((field) => field.value !== '')
+          .map((field) => `${field.label}: ${field.value}`)
+      : []
+
+    await generateWorkerInvoicePdf({
+      workerName: profile.full_name,
+      weekStart: submission.week_start,
+      weekEnd: submission.week_end,
+      invoiceNumber: invoiceNumberFor(submission, workerSubmissions),
+      dateIssuedIso: toISODate(new Date()),
+      dateDueIso: toISODate(dueDate),
+      clientTotals,
+      amount: submission.amount,
+      paymentMethodLabel: method ? paymentMethodLabel[method] : null,
+      paymentMethodLines,
+    })
   }
 
   const handleSubmit = () => submitWeek({ weekStart, weekEnd, weekDates, totalsByDate, entries: weekEntries })
@@ -296,6 +334,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
           selectedSubmissionClientTotals={selectedSubmissionClientTotals}
           selectedSubmissionBreakdown={selectedSubmissionBreakdown}
           onCloseSubmissionModal={() => setSelectedSubmissionId(null)}
+          onDownloadInvoice={(submission, clientTotals) => downloadInvoicePdf(submission, clientTotals, submissions)}
           selectedDate={selectedDate}
           workerId={profile.id}
           clients={clients}

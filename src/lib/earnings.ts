@@ -1,4 +1,4 @@
-import type { Client, OwnerSubmissionCategory, SaleEntry, SaleSection } from '../types'
+import type { Client, OwnerSubmissionCategory, SaleEntry, SaleSection, Submission } from '../types'
 
 export const NET_RATE = 0.8
 
@@ -46,6 +46,20 @@ export function clientPayoutTotal(entries: SaleEntry[], client: Client | undefin
     (sum, section) => sum + calcClientPayout(netBySection[section], section, ownerCutPercentForSection(client, section)),
     0,
   )
+}
+
+/**
+ * A stable per-worker invoice number for a weekly submission - its 1-based
+ * position among that worker's own submissions, oldest week first. Derived
+ * rather than stored so it needs no schema/migration, at the cost of
+ * shifting if an earlier submission is later deleted (acceptable for this
+ * small internal app - the owner dashboard already deletes submissions
+ * outright with no other numbering/audit trail either).
+ */
+export function invoiceNumberFor(submission: Submission, workerSubmissions: Submission[]): number {
+  const ordered = [...workerSubmissions].sort((a, b) => a.week_start.localeCompare(b.week_start))
+  const index = ordered.findIndex((entry) => entry.id === submission.id)
+  return index === -1 ? ordered.length + 1 : index + 1
 }
 
 export const ownerSubmissionCategoryLabel: Record<OwnerSubmissionCategory, string> = {

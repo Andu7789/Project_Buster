@@ -131,6 +131,27 @@ create table if not exists buster_sale_entries (
 -- re-run - dropping a constraint that's already gone is a no-op in Postgres.
 alter table buster_sale_entries alter column client_id drop not null;
 
+-- Extra intake info a worker must fill in for every 'customs' section sale
+-- entry before they can submit their timesheet (the "Submit Customer Order"
+-- tab). One row per buster_sale_entries row, upserted on sale_entry_id as
+-- the worker fills in the form (fields start null and are filled in over
+-- possibly several edits, unlike buster_sale_entries which is insert/delete
+-- only) - cascades on delete so removing the underlying entry cleans this up
+-- too.
+create table if not exists buster_customer_orders (
+  id uuid primary key default gen_random_uuid(),
+  sale_entry_id uuid not null unique references buster_sale_entries(id) on delete cascade,
+  worker_id uuid not null references buster_profiles(id),
+  custom_type text check (custom_type in ('custom_vid', 'custom_pics', 'video_cock_rate', 'panties_other')),
+  custom_type_other text,
+  profile_link text,
+  custom_info text,
+  pinned_messages boolean,
+  added_to_waiting_list boolean,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Free-standing reminders/events on a calendar day, unrelated to sale
 -- entries (e.g. "Client meeting", "Payday") - owner-only, never surfaced to
 -- workers or learners.
@@ -429,6 +450,7 @@ alter table buster_submissions enable row level security;
 alter table buster_clients enable row level security;
 alter table buster_sale_types enable row level security;
 alter table buster_sale_entries enable row level security;
+alter table buster_customer_orders enable row level security;
 alter table buster_client_invoices enable row level security;
 alter table buster_training_progress enable row level security;
 alter table buster_calendar_events enable row level security;
@@ -538,6 +560,33 @@ create policy "worker deletes own" on buster_sale_entries for delete
   using (
     worker_id in (select id from buster_profiles where auth_user_id = auth.uid())
   );
+
+-- buster_customer_orders policies - unlike buster_sale_entries, workers can
+-- update their own rows freely (the whole point is filling the form in over
+-- multiple edits before submitting), not just insert/delete.
+drop policy if exists "worker inserts own" on buster_customer_orders;
+create policy "worker inserts own" on buster_customer_orders for insert
+  with check (
+    worker_id in (
+      select id from buster_profiles where auth_user_id = auth.uid() and status = 'active'
+    )
+  );
+
+drop policy if exists "worker reads own, owner reads all" on buster_customer_orders;
+create policy "worker reads own, owner reads all" on buster_customer_orders for select
+  using (
+    worker_id in (select id from buster_profiles where auth_user_id = auth.uid())
+    or buster_is_owner()
+  );
+
+drop policy if exists "worker updates own" on buster_customer_orders;
+create policy "worker updates own" on buster_customer_orders for update
+  using (worker_id in (select id from buster_profiles where auth_user_id = auth.uid()))
+  with check (worker_id in (select id from buster_profiles where auth_user_id = auth.uid()));
+
+drop policy if exists "worker deletes own" on buster_customer_orders;
+create policy "worker deletes own" on buster_customer_orders for delete
+  using (worker_id in (select id from buster_profiles where auth_user_id = auth.uid()));
 
 -- buster_client_invoices policies - owner-only, workers never see these
 -- (this is the owner/client-facing side of the money, not the worker's).

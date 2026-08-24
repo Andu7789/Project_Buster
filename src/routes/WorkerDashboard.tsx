@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/authContext'
 import {
   listClients,
+  listCustomerOrdersForWorker,
   listSaleEntriesForWorker,
   listSaleTypes,
   listSubmissionsForWorker,
@@ -9,30 +10,31 @@ import {
 } from '../data/queries'
 import {
   daysOfWeek,
-  formatCurrency,
   formatDayLabel,
-  formatWeekRange,
   getCurrentWeekRange,
   getPreviousWeekRange,
   getWeekDates,
   isWithinGracePeriod,
 } from '../lib/dates'
-import { breakdownByClientAndSection, earningsByClient, sectionLabel } from '../lib/earnings'
-import type { Client, Profile, SaleEntry, SaleType, Submission } from '../types'
+import { breakdownByClientAndSection, earningsByClient } from '../lib/earnings'
+import { missingCustomerOrderFields } from '../lib/customerOrders'
+import type { Client, CustomerOrder, Profile, SaleEntry, SaleType, Submission } from '../types'
 import { PortalHeader } from '../components/PortalHeader'
-import { SubmissionStatusBadge } from '../components/StatusBadge'
-import { Modal } from '../components/Modal'
-import { DayEntryModal } from '../components/DayEntryModal'
-import { HoverEffectGrid } from '../components/HoverEffect/HoverEffectGrid'
-import { HoverEffectItem } from '../components/HoverEffect/HoverEffectItem'
+import { MissingCustomerOrdersModal, type MissingCustomerOrderRow } from '../components/MissingCustomerOrdersModal'
+import { TabNav, type WorkerTabId } from './WorkerDashboard/TabNav'
+import { EarningsTab } from './WorkerDashboard/EarningsTab'
+import { SubmitCustomerOrderTab } from './WorkerDashboard/SubmitCustomerOrderTab'
+import { WorkTimetableTab } from './WorkerDashboard/WorkTimetableTab'
 
 export function WorkerDashboard({ profile }: { profile: Profile }) {
   const { signOut } = useAuth()
+  const [activeTab, setActiveTab] = useState<WorkerTabId>('earnings')
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
   const [weekEntries, setWeekEntries] = useState<SaleEntry[]>([])
   const [previousWeekEntries, setPreviousWeekEntries] = useState<SaleEntry[]>([])
+  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
   const [selectedSubmissionEntries, setSelectedSubmissionEntries] = useState<SaleEntry[]>([])
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [missingOrderRows, setMissingOrderRows] = useState<MissingCustomerOrderRow[] | null>(null)
 
   const { weekStart, weekEnd } = useMemo(() => getCurrentWeekRange(), [])
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart])
@@ -58,14 +61,16 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       graceActive
         ? listSaleEntriesForWorker(profile.id, previousWeek.weekStart, previousWeek.weekEnd)
         : Promise.resolve([]),
+      listCustomerOrdersForWorker(profile.id),
     ])
-      .then(([submissionData, clientData, saleTypeData, entryData, previousEntryData]) => {
+      .then(([submissionData, clientData, saleTypeData, entryData, previousEntryData, customerOrderData]) => {
         if (cancelled) return
         setSubmissions(submissionData)
         setClients(clientData)
         setSaleTypes(saleTypeData)
         setWeekEntries(entryData)
         setPreviousWeekEntries(previousEntryData)
+        setCustomerOrders(customerOrderData)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load your timesheets.')
@@ -144,6 +149,8 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     ? [...weekEntries, ...previousWeekEntries].filter((entry) => entry.entry_date === selectedDate)
     : []
   const selectedDayReadOnly = selectedIsPreviousWeek ? alreadySubmittedLastWeek : alreadySubmittedThisWeek
+  const selectedDayLabel =
+    selectedDate && selectedDayIndex !== -1 ? formatDayLabel(daysOfWeek[selectedDayIndex], selectedDate) : ''
 
   function handleEntryAdded(entry: SaleEntry) {
     if (previousWeekDates.includes(entry.entry_date)) {
@@ -156,6 +163,27 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   function handleEntryDeleted(entryId: string) {
     setWeekEntries((previous) => previous.filter((entry) => entry.id !== entryId))
     setPreviousWeekEntries((previous) => previous.filter((entry) => entry.id !== entryId))
+    setCustomerOrders((previous) => previous.filter((order) => order.sale_entry_id !== entryId))
+  }
+
+  function handleOrderSaved(order: CustomerOrder) {
+    setCustomerOrders((previous) => {
+      const existingIndex = previous.findIndex((candidate) => candidate.id === order.id)
+      if (existingIndex === -1) return [...previous, order]
+      const next = [...previous]
+      next[existingIndex] = order
+      return next
+    })
+  }
+
+  function findMissingCustomerOrders(entries: SaleEntry[]): MissingCustomerOrderRow[] {
+    return entries
+      .filter((entry) => entry.section === 'customs')
+      .map((entry) => ({
+        entry,
+        missingFields: missingCustomerOrderFields(customerOrders.find((order) => order.sale_entry_id === entry.id)),
+      }))
+      .filter((row) => row.missingFields.length > 0)
   }
 
   async function submitWeek(params: {
@@ -163,9 +191,16 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     weekEnd: string
     weekDates: string[]
     totalsByDate: Map<string, number>
+    entries: SaleEntry[]
   }) {
     setFormError(null)
     setMessage(null)
+
+    const missingRows = findMissingCustomerOrders(params.entries)
+    if (missingRows.length > 0) {
+      setMissingOrderRows(missingRows)
+      return
+    }
 
     const dayAmounts: Record<string, number> = {}
     daysOfWeek.forEach((day, index) => {
@@ -198,13 +233,14 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     }
   }
 
-  const handleSubmit = () => submitWeek({ weekStart, weekEnd, weekDates, totalsByDate })
+  const handleSubmit = () => submitWeek({ weekStart, weekEnd, weekDates, totalsByDate, entries: weekEntries })
   const handleSubmitLastWeek = () =>
     submitWeek({
       weekStart: previousWeek.weekStart,
       weekEnd: previousWeek.weekEnd,
       weekDates: previousWeekDates,
       totalsByDate: previousTotalsByDate,
+      entries: previousWeekEntries,
     })
 
   const graceDeadlineLabel = useMemo(
@@ -216,313 +252,80 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
     <div className="app-shell">
       <PortalHeader portalLabel="Worker portal" userName={profile.full_name} onSignOut={signOut} />
 
-      <section className="panel worker-panel">
-        <div className="panel-head">
-          <div>
-            <h2>This week</h2>
-            <p>{formatWeekRange(weekStart, weekEnd)}</p>
-          </div>
-        </div>
+      <TabNav active={activeTab} onChange={setActiveTab} />
 
-        {alreadySubmittedThisWeek && (
-          <p className="info-text">
-            You've already submitted this week's timesheet. You can still open a day below to review its entries.
-          </p>
-        )}
-
-        <div className="stack">
-          <HoverEffectGrid className="day-grid">
-            {daysOfWeek.map((day, index) => {
-              const date = weekDates[index]
-              return (
-                <HoverEffectItem key={day} index={index}>
-                  <button
-                    type="button"
-                    className="day-card day-card-clickable"
-                    onClick={() => setSelectedDate(date)}
-                  >
-                    <span>{day}</span>
-                    <strong>{formatCurrency(totalsByDate.get(date) ?? 0)}</strong>
-                  </button>
-                </HoverEffectItem>
-              )
-            })}
-          </HoverEffectGrid>
-
-          <div className="table-wrapper">
-            <table className="detail-table">
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Total earnings</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientTotals.map((row) => (
-                  <tr key={row.clientName}>
-                    <td>{row.clientName}</td>
-                    <td>{formatCurrency(row.earnings)}</td>
-                  </tr>
-                ))}
-                {clientTotals.length === 0 && (
-                  <tr>
-                    <td colSpan={2} className="empty-row">
-                      No entries logged yet this week.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="summary-card">
-            <strong>Current week total</strong>
-            <p className="summary-figure">{formatCurrency(liveTotal)}</p>
-          </div>
-
-          {!alreadySubmittedThisWeek && (
-            <button type="button" className="btn-primary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit earnings'}
-            </button>
-          )}
-          {formError && <p className="message message-error">{formError}</p>}
-          {message && <p className="message message-info">{message}</p>}
-        </div>
-      </section>
-
-      {showLastWeekPanel && (
-        <section className="panel worker-panel">
-          <div className="panel-head">
-            <div>
-              <h2>Last week</h2>
-              <p>
-                {formatWeekRange(previousWeek.weekStart, previousWeek.weekEnd)} — add sales until {graceDeadlineLabel}
-              </p>
-            </div>
-          </div>
-
-          <div className="stack">
-            <HoverEffectGrid className="day-grid">
-              {daysOfWeek.map((day, index) => {
-                const date = previousWeekDates[index]
-                return (
-                  <HoverEffectItem key={day} index={index}>
-                    <button
-                      type="button"
-                      className="day-card day-card-clickable"
-                      onClick={() => setSelectedDate(date)}
-                    >
-                      <span>{day}</span>
-                      <strong>{formatCurrency(previousTotalsByDate.get(date) ?? 0)}</strong>
-                    </button>
-                  </HoverEffectItem>
-                )
-              })}
-            </HoverEffectGrid>
-
-            <div className="table-wrapper">
-              <table className="detail-table">
-                <thead>
-                  <tr>
-                    <th>Client</th>
-                    <th>Total earnings</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previousClientTotals.map((row) => (
-                    <tr key={row.clientName}>
-                      <td>{row.clientName}</td>
-                      <td>{formatCurrency(row.earnings)}</td>
-                    </tr>
-                  ))}
-                  {previousClientTotals.length === 0 && (
-                    <tr>
-                      <td colSpan={2} className="empty-row">
-                        No entries logged for last week.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="summary-card">
-              <strong>Last week total</strong>
-              <p className="summary-figure">{formatCurrency(previousLiveTotal)}</p>
-            </div>
-
-            <button type="button" className="btn-primary" onClick={handleSubmitLastWeek} disabled={submitting}>
-              {submitting ? 'Submitting…' : "Submit last week's earnings"}
-            </button>
-            {formError && <p className="message message-error">{formError}</p>}
-            {message && <p className="message message-info">{message}</p>}
-          </div>
-        </section>
-      )}
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Past timesheets</h2>
-            <p>View-only — submitted timesheets can't be edited.</p>
-          </div>
-          <div className="summary-card summary-card-inline">
-            <span className="stat-label">Lifetime submitted</span>
-            <strong>{formatCurrency(lifetimeTotal)}</strong>
-          </div>
-        </div>
-
-        {loadingSubmissions ? (
-          <p className="info-text">Loading your timesheets…</p>
-        ) : loadError ? (
-          <p className="message message-error">{loadError}</p>
-        ) : (
-          <div className="table-wrapper">
-            <table className="submission-table">
-              <thead>
-                <tr>
-                  <th>Week</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {submissions.map((submission) => (
-                  <tr
-                    key={submission.id}
-                    className="submission-row"
-                    onClick={() => setSelectedSubmissionId(submission.id)}
-                  >
-                    <td>{formatWeekRange(submission.week_start, submission.week_end)}</td>
-                    <td>{formatCurrency(submission.amount)}</td>
-                    <td>
-                      <SubmissionStatusBadge dealtWith={submission.dealt_with} />
-                    </td>
-                  </tr>
-                ))}
-                {submissions.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="empty-row">
-                      No timesheets submitted yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {selectedSubmission && (
-        <Modal title="Timesheet detail" onClose={() => setSelectedSubmissionId(null)}>
-          <p className="modal-subtitle">{formatWeekRange(selectedSubmission.week_start, selectedSubmission.week_end)}</p>
-          <div className="detail-summary">
-            <div>
-              <p className="label">Total submitted</p>
-              <strong>{formatCurrency(selectedSubmission.amount)}</strong>
-            </div>
-            <div>
-              <p className="label">Status</p>
-              <strong>
-                <SubmissionStatusBadge dealtWith={selectedSubmission.dealt_with} />
-              </strong>
-            </div>
-          </div>
-
-          <table className="detail-table">
-            <thead>
-              <tr>
-                <th>Day</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(selectedSubmission.day_amounts).map(([day, amount]) => (
-                <tr key={day}>
-                  <td>{day}</td>
-                  <td>{formatCurrency(amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <h3>Earnings by client</h3>
-          <table className="detail-table">
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Total earnings</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedSubmissionClientTotals.map((row) => (
-                <tr key={row.clientName}>
-                  <td>{row.clientName}</td>
-                  <td>{formatCurrency(row.earnings)}</td>
-                </tr>
-              ))}
-              {selectedSubmissionClientTotals.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="empty-row">
-                    No line items recorded for this week.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <h3>Full breakdown</h3>
-          <table className="detail-table">
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Section</th>
-                <th>Gross</th>
-                <th>Net</th>
-                <th>Earnings</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedSubmissionBreakdown.map((row) => (
-                <tr key={`${row.clientName}:${row.section}`}>
-                  <td>{row.clientName}</td>
-                  <td>{sectionLabel[row.section]}</td>
-                  <td>{formatCurrency(row.gross)}</td>
-                  <td>{formatCurrency(row.net)}</td>
-                  <td>{formatCurrency(row.earnings)}</td>
-                </tr>
-              ))}
-              {selectedSubmissionBreakdown.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="empty-row">
-                    No line items recorded for this week.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          {selectedSubmission.notes && (
-            <div className="submission-notes">
-              <p className="label">Your note</p>
-              <p>{selectedSubmission.notes}</p>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {selectedDate && selectedDayIndex !== -1 && (
-        <DayEntryModal
-          date={selectedDate}
-          dayLabel={formatDayLabel(daysOfWeek[selectedDayIndex], selectedDate)}
+      {activeTab === 'earnings' && (
+        <EarningsTab
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          weekDates={weekDates}
+          totalsByDate={totalsByDate}
+          clientTotals={clientTotals}
+          liveTotal={liveTotal}
+          alreadySubmittedThisWeek={alreadySubmittedThisWeek}
+          onSubmit={handleSubmit}
+          onDayClick={setSelectedDate}
+          showLastWeekPanel={showLastWeekPanel}
+          previousWeek={previousWeek}
+          previousWeekDates={previousWeekDates}
+          previousTotalsByDate={previousTotalsByDate}
+          previousClientTotals={previousClientTotals}
+          previousLiveTotal={previousLiveTotal}
+          graceDeadlineLabel={graceDeadlineLabel}
+          onSubmitLastWeek={handleSubmitLastWeek}
+          submitting={submitting}
+          formError={formError}
+          message={message}
+          submissions={submissions}
+          loadingSubmissions={loadingSubmissions}
+          loadError={loadError}
+          lifetimeTotal={lifetimeTotal}
+          onSelectSubmission={setSelectedSubmissionId}
+          selectedSubmission={selectedSubmission}
+          selectedSubmissionClientTotals={selectedSubmissionClientTotals}
+          selectedSubmissionBreakdown={selectedSubmissionBreakdown}
+          onCloseSubmissionModal={() => setSelectedSubmissionId(null)}
+          selectedDate={selectedDate}
           workerId={profile.id}
           clients={clients}
           saleTypes={saleTypes}
-          entries={selectedDayEntries}
-          readOnly={selectedDayReadOnly}
+          selectedDayLabel={selectedDayLabel}
+          selectedDayEntries={selectedDayEntries}
+          selectedDayReadOnly={selectedDayReadOnly}
           onEntryAdded={handleEntryAdded}
           onEntryDeleted={handleEntryDeleted}
-          onClose={() => setSelectedDate(null)}
+          onCloseDayModal={() => setSelectedDate(null)}
+        />
+      )}
+
+      {activeTab === 'submitCustomerOrder' && (
+        <SubmitCustomerOrderTab
+          workerId={profile.id}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          entries={weekEntries}
+          clients={clients}
+          saleTypes={saleTypes}
+          customerOrders={customerOrders}
+          showLastWeek={showLastWeekPanel}
+          previousWeekStart={previousWeek.weekStart}
+          previousWeekEnd={previousWeek.weekEnd}
+          previousEntries={previousWeekEntries}
+          onOrderSaved={handleOrderSaved}
+        />
+      )}
+
+      {activeTab === 'workTimetable' && <WorkTimetableTab />}
+
+      {missingOrderRows && (
+        <MissingCustomerOrdersModal
+          rows={missingOrderRows}
+          clients={clients}
+          onGoToSubmitCustomerOrder={() => {
+            setActiveTab('submitCustomerOrder')
+            setMissingOrderRows(null)
+          }}
+          onClose={() => setMissingOrderRows(null)}
         />
       )}
     </div>

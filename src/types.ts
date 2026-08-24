@@ -86,6 +86,23 @@ export interface SaleEntry {
   created_at: string
 }
 
+export type CustomOrderType = 'custom_vid' | 'custom_pics' | 'video_cock_rate' | 'panties_other'
+
+/** One per 'customs'-section SaleEntry - the intake form a worker fills in for each custom before they can submit. */
+export interface CustomerOrder {
+  id: string
+  sale_entry_id: string
+  worker_id: string
+  custom_type: CustomOrderType | null
+  custom_type_other: string | null
+  profile_link: string | null
+  custom_info: string | null
+  pinned_messages: boolean | null
+  added_to_waiting_list: boolean | null
+  created_at: string
+  updated_at: string
+}
+
 export interface CalendarEvent {
   id: string
   event_date: string

@@ -4,6 +4,8 @@ import type {
   CalendarEvent,
   Client,
   ClientInvoice,
+  CustomerOrder,
+  CustomOrderType,
   DevRequest,
   OwnerSubmission,
   OwnerSubmissionCategory,
@@ -559,6 +561,49 @@ export async function listSaleEntriesForRange(startDate: string, endDate: string
 
 /** Alias kept for existing week-scoped call sites. */
 export const listSaleEntriesForWeek = listSaleEntriesForRange
+
+/** All customer-order intake forms for this worker, across every week - matched to sale entries client-side by sale_entry_id. */
+export async function listCustomerOrdersForWorker(workerId: string): Promise<CustomerOrder[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_customer_orders').select('*').eq('worker_id', workerId)
+  if (error) throw error
+  return (data ?? []) as CustomerOrder[]
+}
+
+/** Creates or updates the one customer-order row for a customs sale entry (unique on sale_entry_id). */
+export async function upsertCustomerOrder(input: {
+  saleEntryId: string
+  workerId: string
+  customType: CustomOrderType
+  customTypeOther: string | null
+  profileLink: string
+  customInfo: string
+  pinnedMessages: boolean
+  addedToWaitingList: boolean
+}): Promise<CustomerOrder> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_customer_orders')
+    .upsert(
+      {
+        sale_entry_id: input.saleEntryId,
+        worker_id: input.workerId,
+        custom_type: input.customType,
+        custom_type_other: input.customTypeOther,
+        profile_link: input.profileLink.trim(),
+        custom_info: input.customInfo.trim(),
+        pinned_messages: input.pinnedMessages,
+        added_to_waiting_list: input.addedToWaitingList,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'sale_entry_id' },
+    )
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as CustomerOrder
+}
 
 export async function listCalendarEventsForRange(startDate: string, endDate: string): Promise<CalendarEvent[]> {
   const client = requireClient()

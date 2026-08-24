@@ -27,6 +27,10 @@ export function SubmissionStatusBadge({ dealtWith }: { dealtWith: boolean }) {
   )
 }
 
+export function CustomerOrderStatusBadge({ complete }: { complete: boolean }) {
+  return complete ? <StatusBadge tone="success">Complete</StatusBadge> : <StatusBadge tone="danger">Incomplete</StatusBadge>
+}
+
 const requestTypeLabels: Record<RequestType, string> = {
   bug: 'Bug',
   feature: 'Feature idea',

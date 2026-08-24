@@ -933,6 +933,39 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.yes-no-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.yes-no-field .label {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.yes-no-options {
+  display: flex;
+  gap: 18px;
+}
+
+.yes-no-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+
+.yes-no-option input {
+  width: auto;
+}
+
+.customer-order-row {
+  cursor: pointer;
+}
+
 .owner-submission-add-row {
   display: grid;
   grid-template-columns: 140px minmax(85px, 140px) 113px 100px 113px minmax(140px, auto) auto;

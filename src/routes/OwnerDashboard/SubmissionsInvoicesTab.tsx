@@ -188,7 +188,7 @@ export function SubmissionsInvoicesTab({
               <tr>
                 <th>Client</th>
                 <th>Week</th>
-                <th>Client earnings</th>
+                <th>Management commission</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -197,7 +197,7 @@ export function SubmissionsInvoicesTab({
                 <tr key={invoice.id} className="submission-row" onClick={() => onViewInvoice(invoice.id)}>
                   <td>{clients.find((c) => c.id === invoice.client_id)?.name ?? 'Unknown client'}</td>
                   <td>{formatWeekRange(invoice.week_start, invoice.week_end)}</td>
-                  <td>{formatCurrency(invoice.client_payout)}</td>
+                  <td>{formatCurrency(invoice.owner_cut)}</td>
                   <td>
                     <SubmissionStatusBadge dealtWith={invoice.dealt_with} />
                   </td>

@@ -86,6 +86,14 @@ blocking the request/reply.
 
 ## Deployment
 
-This project deploys to Netlify as a static site (`netlify.toml` is already configured, including the redirect rule
-client-side routing needs). Connect the GitHub repo at app.netlify.com and set `VITE_SUPABASE_URL` /
-`VITE_SUPABASE_ANON_KEY` in the site's environment variables before the first deploy.
+This project deploys to Cloudflare Workers as static assets (`wrangler.jsonc` is already configured, serving
+`./dist` as a single-page app). Build and deploy with:
+
+```bash
+npm run build
+npx wrangler deploy
+```
+
+The first deploy needs a Cloudflare account with access to the `project-buster` Worker (see `account_id` in
+`wrangler.jsonc`) — run `npx wrangler login` first if you haven't authenticated on this machine. Set
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in `.env.local` before building, since Vite inlines them at build time.

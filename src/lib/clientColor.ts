@@ -25,11 +25,12 @@ function mixWithWhite(hex: string, amount: number): string {
   return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`
 }
 
-/** CSS custom properties for a client's card/panel background+border, derived from their stored accent color. */
+/** CSS custom properties for a client's card/panel background+border+accent, derived from their stored accent color. */
 export function clientColorVars(color: string): CSSProperties {
   return {
     '--client-bg': mixWithWhite(color, 0.12),
     '--client-border': mixWithWhite(color, 0.4),
+    '--client-accent': color,
   } as CSSProperties
 }
 

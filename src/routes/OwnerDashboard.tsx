@@ -818,7 +818,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
 
     // Weeks start Monday - the invoice is sent the following Monday, due the Wednesday of that same week.
     const dueDate = new Date(submission.week_start)
-    dueDate.setDate(dueDate.getDate() + 2)
+    dueDate.setDate(dueDate.getDate() + 9)
 
     const details = workerPaymentDetails.find((entry) => entry.worker_id === submission.worker_id)
     const paymentMethodLines = details
@@ -1005,7 +1005,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     }
 
     const dueDate = new Date(ownerSubmissionsWeekStart)
-    dueDate.setDate(dueDate.getDate() + 2) // weeks start Monday - invoices are due the Wednesday of the same week
+    dueDate.setDate(dueDate.getDate() + 9) // weeks start Monday - invoice is sent the following Monday, due the Wednesday of that same week
 
     const method = client.payment_method
     const methodDetails = method ? paymentMethods.find((entry) => entry.method === method)?.details : undefined

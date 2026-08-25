@@ -54,7 +54,7 @@ export function PastOwnerInvoicesModal({
         </p>
         <p className="info-text">
           This permanently removes this week's owner invoice record ({formatCurrency(selected.combined_owner_cut)}
-          combined owner cut). This can't be undone.
+          combined management commission). This can't be undone.
         </p>
         {error && <p className="message message-error">{error}</p>}
         <div className="modal-actions">
@@ -84,7 +84,7 @@ export function PastOwnerInvoicesModal({
             <span>{formatCurrency(selected.client_invoice_owner_cut)}</span>
           </div>
           <div className="invoice-line invoice-line-total">
-            <span>Combined owner cut</span>
+            <span>Combined management commission</span>
             <span>{formatCurrency(selected.combined_owner_cut)}</span>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function PastOwnerInvoicesModal({
           <thead>
             <tr>
               <th>Week</th>
-              <th>Combined owner cut</th>
+              <th>Combined management commission</th>
               <th>Status</th>
             </tr>
           </thead>

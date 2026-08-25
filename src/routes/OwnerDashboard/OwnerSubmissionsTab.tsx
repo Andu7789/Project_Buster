@@ -177,7 +177,7 @@ function OwnerSubmissionCategoryTable({
               <th>Username</th>
               <th>Gross</th>
               <th>Net</th>
-              <th>Owner cut</th>
+              <th>Management commission</th>
               <th></th>
             </tr>
           </thead>
@@ -321,7 +321,7 @@ function OwnerSubmissionCategoryTable({
         />
         <span className="entry-preview">
           {previewNet !== null && previewOwnerCut !== null
-            ? `Net ${formatCurrency(previewNet)} · Owner cut ${formatCurrency(previewOwnerCut)}`
+            ? `Net ${formatCurrency(previewNet)} · Management commission ${formatCurrency(previewOwnerCut)}`
             : ''}
         </span>
         <button type="submit" className="btn-outline" disabled={saving}>

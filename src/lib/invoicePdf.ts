@@ -131,6 +131,10 @@ function dailyRowsToBody(rows: DailyEntryRow[]): string[][] {
   return rows.map((row) => [row.date, row.user, row.type, formatUsd(row.gross), formatUsd(row.net), formatUsd(row.earnings)])
 }
 
+function ownerSubmissionToDailyRow(entry: OwnerSubmission, typeLabel: string): DailyEntryRow {
+  return { date: entry.entry_date, user: entry.buyer_username, type: typeLabel, gross: entry.gross, net: entry.net, earnings: entry.owner_cut }
+}
+
 /** Renders a titled Date/User/Type/Gross/Net/Earnings table, or nothing if there are no rows for it. */
 function renderDailyTable(doc: jsPDF, title: string, rows: DailyEntryRow[], startY: number): number {
   if (rows.length === 0) return startY
@@ -156,9 +160,9 @@ function renderDailyTable(doc: jsPDF, title: string, rows: DailyEntryRow[], star
  * Number/Date Issued/Bill to/Date Due, the client's payment method, and a Service
  * Description/Total (USD)/Total (GBP) summary table) modelled on the owner's Canva
  * template; page two lists the contractor Sexting/Customs entries broken down by day
- * (an Unlocks & Tips table plus a Customs table per day), followed by the owner's own
- * Paige sexting / Alex sexting entries (same "Sexting Sales & Customs" total as the
- * contractor entries above); page three lists the owner's remaining submissions split
+ * (an Unlocks & Tips table, which also folds in the owner's own Paige sexting / Alex
+ * sexting entries for that day, plus a Customs table per day - same "Sexting Sales &
+ * Customs" total as page one); page three lists the owner's remaining submissions split
  * into a Purchases table (Subscriptions and Livestreams categories) and a Tips table -
  * internal reference pages, not shown to the client.
  */
@@ -274,63 +278,53 @@ export async function generateOwnerInvoicePdf(input: {
   doc.setTextColor(...INK)
   doc.text(`Converted at $1 = £${rate.toFixed(4)} (rate on ${input.exchangeRateDate})`, 14, thankYouImgY + thankYouImgHeight + 8)
 
-  // Page two - contractor entries (Sexting/Customs), grouped by day, oldest first.
+  // Page two - contractor Sexting/Customs entries plus the owner's own Paige/Alex sexting
+  // entries, all grouped together by day, oldest first.
   doc.addPage()
   doc.setFontSize(14)
   doc.text('Sexting Sales', 14, 20)
   let y2 = 20
 
-  if (input.saleEntries.length === 0) {
+  const entriesByDate = new Map<string, SaleEntry[]>()
+  for (const entry of input.saleEntries) {
+    const list = entriesByDate.get(entry.entry_date) ?? []
+    list.push(entry)
+    entriesByDate.set(entry.entry_date, list)
+  }
+  const ownerSextingByDate = new Map<string, OwnerSubmission[]>()
+  for (const entry of input.sextingOwnerSubmissions) {
+    const list = ownerSextingByDate.get(entry.entry_date) ?? []
+    list.push(entry)
+    ownerSextingByDate.set(entry.entry_date, list)
+  }
+  const dates = Array.from(new Set([...entriesByDate.keys(), ...ownerSextingByDate.keys()])).sort((a, b) => a.localeCompare(b))
+
+  if (dates.length === 0) {
     doc.setFontSize(10)
     doc.text('No contractor entries recorded for this client this week.', 14, y2 + 8)
   } else {
-    const entriesByDate = new Map<string, SaleEntry[]>()
-    for (const entry of input.saleEntries) {
-      const list = entriesByDate.get(entry.entry_date) ?? []
-      list.push(entry)
-      entriesByDate.set(entry.entry_date, list)
-    }
-    const dates = Array.from(entriesByDate.keys()).sort((a, b) => a.localeCompare(b))
-
     for (const date of dates) {
-      const dayEntries = entriesByDate.get(date)!
+      const dayEntries = entriesByDate.get(date) ?? []
       const unlockTipRows = dayEntries
         .filter((entry) => entry.section === 'sexting')
         .map((entry) => toDailyRow(entry, input.saleTypes, input.sextingOwnerPercent, input.customsOwnerPercent))
       const customRows = dayEntries
         .filter((entry) => entry.section === 'customs')
         .map((entry) => toDailyRow(entry, input.saleTypes, input.sextingOwnerPercent, input.customsOwnerPercent))
+      const ownerSextingRows = (ownerSextingByDate.get(date) ?? []).map((entry) =>
+        ownerSubmissionToDailyRow(entry, ownerSubmissionCategoryLabel[entry.category]),
+      )
 
       y2 = ensureSpace(doc, y2, 16)
       doc.setFontSize(12)
       doc.text(date, 14, y2 + 10)
       y2 += 14
 
-      y2 = renderDailyTable(doc, 'Unlocks & Tips', unlockTipRows, y2)
+      y2 = renderDailyTable(doc, 'Unlocks & Tips', [...unlockTipRows, ...ownerSextingRows], y2)
       y2 = renderDailyTable(doc, 'Customs', customRows, y2)
       y2 += 4
     }
   }
-
-  // Page two continued - the owner's own Paige sexting / Alex sexting entries, same total as above.
-  const paigeSextingRows: CategoryEntryRow[] = input.sextingOwnerSubmissions
-    .filter((entry) => entry.category === 'paige_sexting')
-    .map((entry) => ({ date: entry.entry_date, user: entry.buyer_username, gross: entry.gross, net: entry.net, earnings: entry.owner_cut }))
-    .sort((a, b) => a.date.localeCompare(b.date))
-
-  const alexSextingRows: CategoryEntryRow[] = input.sextingOwnerSubmissions
-    .filter((entry) => entry.category === 'alex_sexting')
-    .map((entry) => ({ date: entry.entry_date, user: entry.buyer_username, gross: entry.gross, net: entry.net, earnings: entry.owner_cut }))
-    .sort((a, b) => a.date.localeCompare(b.date))
-
-  y2 = renderCategoryTable(
-    doc,
-    ownerSubmissionCategoryLabel.paige_sexting,
-    paigeSextingRows,
-    'No Paige sexting recorded for this client this week.',
-    y2,
-  )
-  renderCategoryTable(doc, ownerSubmissionCategoryLabel.alex_sexting, alexSextingRows, 'No Alex sexting recorded for this client this week.', y2)
 
   // Page three - owner submissions, split into Purchases (Subscriptions/Livestreams) and Tips.
   const purchaseRows: CategoryEntryRow[] = input.ownerSubmissions

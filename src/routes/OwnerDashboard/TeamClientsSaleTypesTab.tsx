@@ -494,7 +494,7 @@ export function TeamClientsSaleTypesTab({
         </div>
 
         <div className="table-header">
-          <h3>Owner cut %</h3>
+          <h3>Management commission %</h3>
           <p>How much of each client's earnings the owner keeps, by transaction type.</p>
         </div>
         <div className="table-wrapper">

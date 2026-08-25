@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { addTimetableShift, deleteTimetableShift, listAllTimetableShifts, updateTimetableShift } from '../../data/queries'
 import { daysOfWeek } from '../../lib/dates'
+import { clientColorVars } from '../../lib/clientColor'
 import type { Client, DayShift, Profile, TimetableShift } from '../../types'
 
 /** Blank start and end (rather than a separate Off toggle) means the day is off. */
@@ -124,7 +125,7 @@ function ClientTimetableSection({
   }
 
   return (
-    <section className="panel">
+    <section className="panel timetable-client-panel" style={clientColorVars(client.color)}>
       <div className="panel-head">
         <div>
           <h2>{client.name}</h2>
@@ -143,7 +144,7 @@ function ClientTimetableSection({
             ))}
           </select>
         </label>
-        <button type="submit" className="btn-primary" disabled={adding || !addWorkerId}>
+        <button type="submit" className="btn-primary btn-client-color" disabled={adding || !addWorkerId}>
           {adding ? 'Adding…' : 'Add contractor'}
         </button>
       </form>

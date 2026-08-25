@@ -114,7 +114,7 @@ export function OwnerSubmissionInvoiceModal({
         </p>
 
         <p className="info-text">
-          This invoice combines {weekLabel}'s owner submissions with the client invoice owner cut, but not every
+          This invoice combines {weekLabel}'s owner submissions with the client invoice management commission, but not every
           contractor who logged work for {clientName} that week has submitted their timesheet and been confirmed as
           checked yet:
         </p>
@@ -163,7 +163,7 @@ export function OwnerSubmissionInvoiceModal({
             <span>{formatCurrency(invoice.client_invoice_owner_cut)}</span>
           </div>
           <div className="invoice-line invoice-line-total">
-            <span>Combined owner cut</span>
+            <span>Combined management commission</span>
             <span>{formatCurrency(invoice.combined_owner_cut)}</span>
           </div>
         </div>
@@ -220,7 +220,7 @@ export function OwnerSubmissionInvoiceModal({
           <strong>{formatCurrency(clientInvoiceOwnerCut)}</strong>
         </div>
         <div>
-          <p className="label">Combined owner cut</p>
+          <p className="label">Combined management commission</p>
           <strong>{formatCurrency(combinedOwnerCut)}</strong>
         </div>
         <div>
@@ -235,7 +235,7 @@ export function OwnerSubmissionInvoiceModal({
         <thead>
           <tr>
             <th>Category</th>
-            <th>Owner cut</th>
+            <th>Management commission</th>
           </tr>
         </thead>
         <tbody>

@@ -199,6 +199,15 @@
   cursor: not-allowed;
 }
 
+/* Buttons that should match a client's own accent color instead of the app-wide pink (e.g. "Add contractor" on the work timetable) - relies on --client-accent, set inline via clientColorVars(). */
+.btn-client-color {
+  background: var(--client-accent);
+}
+
+.btn-client-color:hover {
+  filter: brightness(0.9);
+}
+
 .btn-ghost {
   background: var(--surface-tint);
   color: var(--accent-strong);
@@ -718,6 +727,12 @@ a:focus-visible {
   color: var(--ink-muted);
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+/* Work timetable: each client's table header matches their own accent color instead of the app-wide pink. */
+.timetable-client-panel .detail-table th {
+  background: var(--client-bg);
+  border-color: var(--client-border);
 }
 
 /* Narrow number-only inputs (next invoice #, owner-cut %) shouldn't claim as

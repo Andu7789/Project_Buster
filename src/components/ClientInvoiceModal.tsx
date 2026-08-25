@@ -113,15 +113,15 @@ export function ClientInvoiceModal({
 
       <div className="detail-summary">
         <div>
-          <p className="label">Worker cut</p>
+          <p className="label">Chatting commission</p>
           <strong>{formatCurrency(workerCut)}</strong>
         </div>
         <div>
-          <p className="label">Owner cut</p>
+          <p className="label">Management commission</p>
           <strong>{formatCurrency(ownerCut)}</strong>
         </div>
         <div>
-          <p className="label">Client payout</p>
+          <p className="label">Client earnings</p>
           <strong>{formatCurrency(clientPayout)}</strong>
         </div>
         <div>

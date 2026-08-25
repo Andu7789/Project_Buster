@@ -281,7 +281,7 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
   async function downloadInvoicePdf(submission: Submission, clientTotals: ClientEarningsTotal[], workerSubmissions: Submission[]) {
     // Weeks start Monday - the invoice is sent the following Monday, due the Wednesday of that same week.
     const dueDate = new Date(submission.week_start)
-    dueDate.setDate(dueDate.getDate() + 2)
+    dueDate.setDate(dueDate.getDate() + 9)
 
     const method = paymentDetails?.method ?? null
     const paymentMethodLines = method

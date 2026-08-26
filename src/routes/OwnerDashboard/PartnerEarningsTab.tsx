@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listOwnerSubmissionsForRange, listSaleEntriesForRange } from '../../data/queries'
 import { formatCurrency, formatWeekRange, getCurrentWeekRange, toISODate } from '../../lib/dates'
-import { PPV_OWNER_SUBMISSION_CATEGORIES, chattingManagementSplitByClient, isSavClient } from '../../lib/earnings'
+import {
+  PPV_OWNER_SUBMISSION_CATEGORIES,
+  chattingManagementSplitByClient,
+  isSavClient,
+} from '../../lib/earnings'
 import type { Client, OwnerSubmission, SaleEntry } from '../../types'
 
 function shiftWeek(weekStart: string, deltaWeeks: number): string {
@@ -45,13 +49,24 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
   }, [weekStart, weekEnd])
 
   const chattingRows = useMemo(() => chattingManagementSplitByClient(entries, clients), [entries, clients])
-  const chattingManagementTotal = chattingRows.reduce((sum, row) => sum + row.total, 0)
-  const chattingManagementPaige = chattingRows.reduce((sum, row) => sum + row.paigeShare, 0)
-  const chattingManagementAlex = chattingRows.reduce((sum, row) => sum + row.alexShare, 0)
+  const clientChattingPaige = chattingRows.reduce((sum, row) => sum + row.paigeShare, 0)
+  const clientChattingAlex = chattingRows.reduce((sum, row) => sum + row.alexShare, 0)
+
+  // Paige sexting / Alex sexting owner submissions are entered directly (via PM Sales) rather
+  // than split 50/50 from a worker's client sale entry - each goes 100% to the named partner.
+  const paigeDirectSexting = ownerSubmissions
+    .filter((entry) => entry.category === 'paige_sexting')
+    .reduce((sum, entry) => sum + entry.owner_cut, 0)
+  const alexDirectSexting = ownerSubmissions
+    .filter((entry) => entry.category === 'alex_sexting')
+    .reduce((sum, entry) => sum + entry.owner_cut, 0)
+
+  const chattingManagementPaige = clientChattingPaige + paigeDirectSexting
+  const chattingManagementAlex = clientChattingAlex + alexDirectSexting
+  const chattingManagementTotal = chattingManagementPaige + chattingManagementAlex
 
   // Only subscriptions/tips/livestreams count as "PM sales" here - paige_sexting/alex_sexting
-  // owner submissions are already attributed to a specific partner elsewhere (see
-  // PPV_OWNER_SUBMISSION_CATEGORIES) and aren't part of this 50/50 split.
+  // owner submissions are already accounted for above (see PPV_OWNER_SUBMISSION_CATEGORIES).
   const pmSalesTotal = ownerSubmissions
     .filter((entry) => PPV_OWNER_SUBMISSION_CATEGORIES.includes(entry.category))
     .reduce((sum, entry) => sum + entry.owner_cut, 0)
@@ -135,7 +150,7 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
                   <tr key={row.clientName}>
                     <td>
                       {row.clientName}
-                      {isSavClient(row.clientName) && <span className="info-text"> (Sav — 100% to Alex)</span>}
+                      {isSavClient(row.clientName) && <span className="info-text"> (100% to Alex)</span>}
                     </td>
                     <td>{formatCurrency(isSavClient(row.clientName) ? 0 : row.sexting / 2)}</td>
                     <td>{formatCurrency(isSavClient(row.clientName) ? row.sexting : row.sexting / 2)}</td>
@@ -148,6 +163,24 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
                     </td>
                   </tr>
                 )}
+                <tr>
+                  <td>
+                    PM Sales — Paige sexting / Alex sexting <span className="info-text">(submitted directly, 100% each)</span>
+                  </td>
+                  <td>{formatCurrency(paigeDirectSexting)}</td>
+                  <td>{formatCurrency(alexDirectSexting)}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Total</strong>
+                  </td>
+                  <td>
+                    <strong>{formatCurrency(chattingManagementPaige)}</strong>
+                  </td>
+                  <td>
+                    <strong>{formatCurrency(chattingManagementAlex)}</strong>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

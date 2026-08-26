@@ -3,7 +3,7 @@ import type { PaymentMethodType } from '../types'
 export const paymentMethods: PaymentMethodType[] = ['bank', 'wise', 'paypal']
 
 export const paymentMethodLabel: Record<PaymentMethodType, string> = {
-  bank: 'Bank transfer',
+  bank: 'UK Bank Transfer',
   wise: 'WISE',
   paypal: 'PayPal',
 }
@@ -18,12 +18,12 @@ export const paymentMethodFields: Record<PaymentMethodType, { key: string; label
     { key: 'swiftBic', label: 'SWIFT / BIC' },
   ],
   wise: [
-    { key: 'accountName', label: 'Account holder name' },
-    { key: 'email', label: 'WISE email' },
-    { key: 'accountNumber', label: 'Account number / IBAN' },
-    { key: 'phoneNumber', label: 'Phone number' },
+    { key: 'email', label: 'Email' },
+    { key: 'fullName', label: 'Full name' },
+    { key: 'mobileAccountNumber', label: 'Mobile account number' },
     { key: 'country', label: 'Country' },
     { key: 'city', label: 'City' },
+    { key: 'recipientAddress', label: 'Recipient address' },
     { key: 'postalCode', label: 'Postal code' },
   ],
   paypal: [{ key: 'email', label: 'PayPal email' }],

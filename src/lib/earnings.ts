@@ -209,3 +209,24 @@ export function ownerCutByClient(entries: SaleEntry[], clients: Client[]): Clien
   }
   return orderClientKeys(totals.keys(), clients).map((key) => totals.get(key)!)
 }
+
+/** The one client whose chatting management earnings go 100% to Alex instead of the usual 50/50 split with Paige. */
+export function isSavClient(clientName: string): boolean {
+  return clientName.trim().toLowerCase() === 'sav'
+}
+
+export interface PartnerSplitRow extends ClientOwnerCutTotal {
+  paigeShare: number
+  alexShare: number
+}
+
+/**
+ * Chatting management earnings (owner cut on sexting/customs) per client, split 50/50 between
+ * Paige and Alex - except Sav, a one-off exception where Alex takes the full amount.
+ */
+export function chattingManagementSplitByClient(entries: SaleEntry[], clients: Client[]): PartnerSplitRow[] {
+  return ownerCutByClient(entries, clients).map((row) => {
+    const sav = isSavClient(row.clientName)
+    return { ...row, paigeShare: sav ? 0 : row.total / 2, alexShare: sav ? row.total : row.total / 2 }
+  })
+}

@@ -55,7 +55,24 @@ export function SubmissionsInvoicesTab({
         <div className="panel-head">
           <div>
             <h2>Submissions</h2>
-            <p>Select a worker to review their weekly timesheets and mark invoices.</p>
+            <p>
+              {isCurrentWeek
+                ? "This week's worker submissions — review and mark as agreed."
+                : `${formatWeekRange(weekStart, weekEnd)}'s worker submissions — review and mark as agreed.`}
+            </p>
+          </div>
+          <div className="roster-actions">
+            <button type="button" className="btn-outline" onClick={onPreviousWeek}>
+              ← Previous week
+            </button>
+            {!isCurrentWeek && (
+              <button type="button" className="btn-outline" onClick={onJumpToCurrentWeek}>
+                Current week
+              </button>
+            )}
+            <button type="button" className="btn-outline" onClick={onNextWeek} disabled={isCurrentWeek}>
+              Next week →
+            </button>
           </div>
         </div>
 
@@ -103,19 +120,21 @@ export function SubmissionsInvoicesTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedWorkerSubmissions.map((submission) => (
-                    <tr key={submission.id} className="submission-row" onClick={() => onSelectSubmission(submission.id)}>
-                      <td>{formatWeekRange(submission.week_start, submission.week_end)}</td>
-                      <td>{formatCurrency(submission.amount)}</td>
-                      <td>
-                        <SubmissionStatusBadge dealtWith={submission.dealt_with} />
-                      </td>
-                    </tr>
-                  ))}
-                  {selectedWorkerSubmissions.length === 0 && (
+                  {selectedWorkerSubmissions
+                    .filter((submission) => submission.week_start === weekStart && submission.week_end === weekEnd)
+                    .map((submission) => (
+                      <tr key={submission.id} className="submission-row" onClick={() => onSelectSubmission(submission.id)}>
+                        <td>{formatWeekRange(submission.week_start, submission.week_end)}</td>
+                        <td>{formatCurrency(submission.amount)}</td>
+                        <td>
+                          <SubmissionStatusBadge dealtWith={submission.dealt_with} />
+                        </td>
+                      </tr>
+                    ))}
+                  {selectedWorkerSubmissions.filter((submission) => submission.week_start === weekStart && submission.week_end === weekEnd).length === 0 && (
                     <tr>
                       <td colSpan={3} className="empty-row">
-                        No submissions yet
+                        No submissions for this week
                       </td>
                     </tr>
                   )}

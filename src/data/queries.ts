@@ -22,6 +22,8 @@ import type {
   SaleEntry,
   SaleSection,
   SaleType,
+  ServiceInvoice,
+  ServiceInvoiceLineItem,
   Submission,
   TimetableShift,
   TrainingProgress,
@@ -1121,6 +1123,62 @@ export async function getScreenshotSignedUrls(paths: string[]): Promise<Record<s
     if (entry.signedUrl && entry.path) map[entry.path] = entry.signedUrl
   }
   return map
+}
+
+export async function listServiceInvoices(): Promise<ServiceInvoice[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_invoices')
+    .select('*')
+    .order('invoice_number', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as ServiceInvoice[]
+}
+
+/** The next invoice number to assign - a single owner-editable settings row (see supabase/schema.sql). */
+export async function getNextServiceInvoiceNumber(): Promise<number> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_service_invoice_settings').select('next_invoice_number').single()
+  if (error) throw error
+  return (data as { next_invoice_number: number }).next_invoice_number
+}
+
+export async function updateNextServiceInvoiceNumber(nextInvoiceNumber: number): Promise<void> {
+  const client = requireClient()
+  const { error } = await client
+    .from('buster_service_invoice_settings')
+    .update({ next_invoice_number: nextInvoiceNumber, updated_at: new Date().toISOString() })
+    .eq('id', true)
+
+  if (error) throw error
+}
+
+export async function createServiceInvoice(input: {
+  invoiceNumber: number
+  billTo: string
+  dateIssued: string
+  dateDue: string
+  lineItems: ServiceInvoiceLineItem[]
+  totalGbp: number
+}): Promise<ServiceInvoice> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_invoices')
+    .insert({
+      invoice_number: input.invoiceNumber,
+      bill_to: input.billTo,
+      date_issued: input.dateIssued,
+      date_due: input.dateDue,
+      line_items: input.lineItems,
+      total_gbp: input.totalGbp,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  await updateNextServiceInvoiceNumber(input.invoiceNumber + 1)
+  return data as ServiceInvoice
 }
 
 /**

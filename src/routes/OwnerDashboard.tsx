@@ -91,6 +91,7 @@ import { SubmissionsInvoicesTab } from './OwnerDashboard/SubmissionsInvoicesTab'
 import { InvoicesTab } from './OwnerDashboard/InvoicesTab'
 import { OwnerSubmissionsTab } from './OwnerDashboard/OwnerSubmissionsTab'
 import { PartnerEarningsTab } from './OwnerDashboard/PartnerEarningsTab'
+import { ServiceInvoicesTab } from './OwnerDashboard/ServiceInvoicesTab'
 import { CalendarTab } from './OwnerDashboard/CalendarTab'
 import { WorkTimetableTab } from './OwnerDashboard/WorkTimetableTab'
 import { RequestsTab } from './OwnerDashboard/RequestsTab'
@@ -1233,6 +1234,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           )}
 
           {activeTab === 'partnerEarnings' && <PartnerEarningsTab clients={clients} />}
+          {activeTab === 'serviceInvoices' && <ServiceInvoicesTab />}
 
           {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} saleTypes={saleTypes} />}
 

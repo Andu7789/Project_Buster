@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable'
 import logoUrl from '../assets/invoice/ps-management-logo.png'
 import thankYouUrl from '../assets/invoice/ps-management-thankyou.jpg'
 import { calcOwnerCut, ownerSubmissionCategoryLabel } from './earnings'
-import type { OwnerSubmission, SaleEntry, SaleType } from '../types'
+import type { OwnerSubmission, SaleEntry, SaleType, ServiceInvoiceLineItem } from '../types'
 
 const LOGO_ASPECT = 1254 / 1254
 const THANK_YOU_ASPECT = 607 / 380
@@ -26,6 +26,10 @@ function formatUsd(usdAmount: number): string {
 
 function formatGbp(usdAmount: number, rate: number): string {
   return `£${(usdAmount * rate).toFixed(2)}`
+}
+
+function formatGbpAmount(gbpAmount: number): string {
+  return `£${gbpAmount.toFixed(2)}`
 }
 
 function formatDate(iso: string): string {
@@ -464,4 +468,71 @@ export async function generateWorkerInvoicePdf(input: {
   doc.text('This invoice represents subcontracted services under agreement.', 14, y + 11)
 
   doc.save(`${input.workerName.replace(/\s+/g, '-')}-Invoice-${input.invoiceNumber}.pdf`)
+}
+
+/**
+ * A standalone GG Swaps/SFS/admin-services invoice PDF - same branded header/footer as
+ * generateOwnerInvoicePdf's page one, but GBP-only (these customers are never billed in USD)
+ * and a free-form list of line items instead of the fixed Sexting/PPV two-row breakdown.
+ */
+export async function generateServiceInvoicePdf(input: {
+  invoiceNumber: number
+  dateIssuedIso: string
+  dateDueIso: string
+  billToName: string
+  lineItems: ServiceInvoiceLineItem[]
+  totalGbp: number
+}): Promise<void> {
+  const [logoDataUrl, thankYouDataUrl] = await Promise.all([toDataUrl(logoUrl), toDataUrl(thankYouUrl)])
+  const doc = new jsPDF()
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(30)
+  doc.setTextColor(...PINK)
+  doc.text('INVOICE', 14, 26)
+
+  const logoHeight = 26 * 1.25 * 1.25
+  const logoWidth = logoHeight * LOGO_ASPECT
+  doc.addImage(logoDataUrl, 'PNG', 196 - logoWidth, 4, logoWidth, logoHeight)
+  doc.setTextColor(...INK)
+
+  drawField(doc, 'Invoice Number:', `#${input.invoiceNumber}`, 14, 46, 85)
+  drawField(doc, 'Date Issued:', formatDate(input.dateIssuedIso), 110, 46, 86)
+  drawField(doc, 'Bill to:', input.billToName, 14, 64, 85)
+  drawField(doc, 'Date Due:', formatDate(input.dateDueIso), 110, 64, 86)
+
+  autoTable(doc, {
+    startY: 82,
+    head: [['Service Description', 'Total (GBP)']],
+    body: input.lineItems.map((item) => [item.description, formatGbpAmount(item.amountGbp)]),
+    foot: [['Total', formatGbpAmount(input.totalGbp)]],
+    columnStyles: { 0: { cellWidth: 140 } },
+    styles: { fontSize: 10, textColor: INK },
+    headStyles: { fillColor: PINK_LIGHT, textColor: INK, fontStyle: 'bold' },
+    footStyles: { fillColor: PINK_LIGHT, textColor: INK, fontStyle: 'bold' },
+  })
+
+  const afterTableY = lastAutoTableY(doc)
+  const thankYouImgY = afterTableY + 10
+  const thankYouImgWidth = 95 * 0.75
+  const thankYouImgHeight = thankYouImgWidth / THANK_YOU_ASPECT
+  doc.addImage(thankYouDataUrl, 'JPEG', 14, thankYouImgY, thankYouImgWidth, thankYouImgHeight)
+
+  const totalOwedCenterY = thankYouImgY + thankYouImgHeight * 0.19
+
+  doc.setFillColor(...PINK_LIGHT)
+  doc.setDrawColor(...PINK)
+  doc.rect(110, totalOwedCenterY - 6, 86, 12, 'FD')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...INK)
+  doc.text(`Total Owed: ${formatGbpAmount(input.totalGbp)}`, 114, totalOwedCenterY + 2)
+
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.35)
+  doc.line(110, totalOwedCenterY + 16, 196, totalOwedCenterY + 16)
+  doc.line(110, totalOwedCenterY + 22, 196, totalOwedCenterY + 22)
+  doc.line(110, totalOwedCenterY + 28, 196, totalOwedCenterY + 28)
+
+  doc.save(`service-invoice-${input.invoiceNumber}.pdf`)
 }

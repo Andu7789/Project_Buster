@@ -1037,6 +1037,22 @@ a:focus-visible {
   margin-top: 10px;
 }
 
+.service-invoice-add-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 140px auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.service-invoice-settings-row {
+  margin-bottom: 16px;
+}
+
+.service-invoice-generate-btn {
+  margin-top: 16px;
+}
+
 .owner-submission-override {
   display: flex;
   align-items: center;

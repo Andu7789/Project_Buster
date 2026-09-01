@@ -188,6 +188,24 @@ export interface OwnerSubmissionInvoice {
   created_at: string
 }
 
+export interface ServiceInvoiceLineItem {
+  description: string
+  amountGbp: number
+}
+
+/** A standalone GG Swaps/SFS/admin-services invoice - a simple GBP-only line-item bill sent to a
+ * customer outside the OnlyFans-management client roster (Client), distinct from ClientInvoice. */
+export interface ServiceInvoice {
+  id: string
+  invoice_number: number
+  bill_to: string
+  date_issued: string
+  date_due: string
+  line_items: ServiceInvoiceLineItem[]
+  total_gbp: number
+  created_at: string
+}
+
 export type RequestType = 'bug' | 'feature' | 'billing'
 export type RequestPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type RequestStatus = 'open' | 'in_progress' | 'needs_info' | 'completed' | 'declined'

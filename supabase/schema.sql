@@ -363,6 +363,30 @@ create table if not exists buster_owner_submission_invoices (
   unique (client_id, week_start)
 );
 
+-- Standalone GG Swaps/SFS/admin-services invoices sent to customers outside the
+-- OnlyFans-management client roster (buster_clients) - a simple GBP-only line-item
+-- invoice, distinct from buster_client_invoices' sexting/PPV commission breakdown.
+create table if not exists buster_service_invoices (
+  id uuid primary key default gen_random_uuid(),
+  invoice_number integer not null unique,
+  bill_to text not null,
+  date_issued date not null,
+  date_due date not null,
+  line_items jsonb not null default '[]'::jsonb,
+  total_gbp numeric not null,
+  created_at timestamptz not null default now()
+);
+
+-- Singleton settings row holding the next invoice number to assign - owner-editable
+-- so they can set where the sequence starts (e.g. to continue numbering from invoices
+-- already sent outside the app), same idea as buster_clients.next_invoice_number.
+create table if not exists buster_service_invoice_settings (
+  id boolean primary key default true check (id),
+  next_invoice_number integer not null default 1,
+  updated_at timestamptz not null default now()
+);
+insert into buster_service_invoice_settings (id) values (true) on conflict (id) do nothing;
+
 -- Migration: two new owner-submission categories, "Paige sexting" and "Alex
 -- sexting" - the owner's own sexting-type entries, as opposed to the
 -- existing subscriptions/tips/livestreams (Purchases/Tips/Customs). Unlike
@@ -581,6 +605,8 @@ alter table buster_owner_submission_invoices enable row level security;
 alter table buster_payment_methods enable row level security;
 alter table buster_worker_payment_details enable row level security;
 alter table buster_timetable_shifts enable row level security;
+alter table buster_service_invoices enable row level security;
+alter table buster_service_invoice_settings enable row level security;
 
 -- buster_profiles policies
 drop policy if exists "self read" on buster_profiles;
@@ -776,6 +802,18 @@ create policy "owner manages" on buster_owner_submissions for all
 
 drop policy if exists "owner manages" on buster_owner_submission_invoices;
 create policy "owner manages" on buster_owner_submission_invoices for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+-- buster_service_invoices / buster_service_invoice_settings policies - owner-only,
+-- same shape as buster_client_invoices above.
+drop policy if exists "owner manages" on buster_service_invoices;
+create policy "owner manages" on buster_service_invoices for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+drop policy if exists "owner manages" on buster_service_invoice_settings;
+create policy "owner manages" on buster_service_invoice_settings for all
   using (buster_is_owner())
   with check (buster_is_owner());
 

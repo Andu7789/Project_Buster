@@ -5,6 +5,7 @@ export type OwnerTabId =
   | 'invoices'
   | 'ownerSubmissions'
   | 'partnerEarnings'
+  | 'serviceInvoices'
   | 'calendar'
   | 'timetable'
   | 'requests'
@@ -15,6 +16,7 @@ const tabs: { id: OwnerTabId; label: string }[] = [
   { id: 'invoices', label: 'Worker Invoices' },
   { id: 'ownerSubmissions', label: 'PM Sales' },
   { id: 'partnerEarnings', label: 'Alex & Paige Earnings' },
+  { id: 'serviceInvoices', label: 'Service Invoices' },
   { id: 'team', label: 'Teams, Clients & Sale Types' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'timetable', label: 'Work Timetable' },

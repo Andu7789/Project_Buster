@@ -1,4 +1,4 @@
-import type { Client, OwnerSubmissionCategory, SaleEntry, SaleSection, Submission } from '../types'
+import type { Client, OwnerSubmission, OwnerSubmissionCategory, SaleEntry, SaleSection, Submission } from '../types'
 
 export const NET_RATE = 0.8
 
@@ -229,4 +229,50 @@ export function chattingManagementSplitByClient(entries: SaleEntry[], clients: C
     const sav = isSavClient(row.clientName)
     return { ...row, paigeShare: sav ? 0 : row.total / 2, alexShare: sav ? row.total : row.total / 2 }
   })
+}
+
+export interface PmSalesSextingRow {
+  clientName: string
+  paige: number
+  alex: number
+}
+
+/**
+ * paige_sexting/alex_sexting owner submissions (entered directly via PM Sales rather than split
+ * from a worker's client sale entry) grouped by client - each submission's category already says
+ * which partner it belongs to, at 100%.
+ */
+export function pmSalesSextingByClient(ownerSubmissions: OwnerSubmission[], clients: Client[]): PmSalesSextingRow[] {
+  const totals = new Map<string, PmSalesSextingRow>()
+  for (const entry of ownerSubmissions) {
+    if (!SEXTING_OWNER_SUBMISSION_CATEGORIES.includes(entry.category)) continue
+    const key = entry.client_id ?? 'general'
+    const row = totals.get(key) ?? { clientName: clientNameForKey(key, clients), paige: 0, alex: 0 }
+    if (entry.category === 'paige_sexting') row.paige += entry.owner_cut
+    else row.alex += entry.owner_cut
+    totals.set(key, row)
+  }
+  return orderClientKeys(totals.keys(), clients).map((key) => totals.get(key)!)
+}
+
+export interface PmSalesTotalRow {
+  clientName: string
+  total: number
+}
+
+/**
+ * subscriptions/tips/livestreams owner submissions (PM sales purchases & tips, entered directly
+ * rather than split from a worker's client sale entry) grouped by client, before the flat 50/50
+ * Paige/Alex split on the company total.
+ */
+export function pmSalesTotalByClient(ownerSubmissions: OwnerSubmission[], clients: Client[]): PmSalesTotalRow[] {
+  const totals = new Map<string, PmSalesTotalRow>()
+  for (const entry of ownerSubmissions) {
+    if (!PPV_OWNER_SUBMISSION_CATEGORIES.includes(entry.category)) continue
+    const key = entry.client_id ?? 'general'
+    const row = totals.get(key) ?? { clientName: clientNameForKey(key, clients), total: 0 }
+    row.total += entry.owner_cut
+    totals.set(key, row)
+  }
+  return orderClientKeys(totals.keys(), clients).map((key) => totals.get(key)!)
 }

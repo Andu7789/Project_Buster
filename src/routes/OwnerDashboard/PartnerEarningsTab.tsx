@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { InfoHint } from '../../components/InfoHint'
 import { listOwnerSubmissionsForRange, listSaleEntriesForRange } from '../../data/queries'
 import { formatCurrency, formatWeekRange, getCurrentWeekRange, toISODate } from '../../lib/dates'
 import {
   PPV_OWNER_SUBMISSION_CATEGORIES,
   chattingManagementSplitByClient,
   isSavClient,
+  pmSalesSextingByClient,
+  pmSalesTotalByClient,
 } from '../../lib/earnings'
 import type { Client, OwnerSubmission, SaleEntry } from '../../types'
 
@@ -49,6 +52,14 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
   }, [weekStart, weekEnd])
 
   const chattingRows = useMemo(() => chattingManagementSplitByClient(entries, clients), [entries, clients])
+  const pmSalesSextingRows = useMemo(
+    () => pmSalesSextingByClient(ownerSubmissions, clients),
+    [ownerSubmissions, clients],
+  )
+  const pmSalesTotalRows = useMemo(
+    () => pmSalesTotalByClient(ownerSubmissions, clients),
+    [ownerSubmissions, clients],
+  )
   const clientChattingPaige = chattingRows.reduce((sum, row) => sum + row.paigeShare, 0)
   const clientChattingAlex = chattingRows.reduce((sum, row) => sum + row.alexShare, 0)
 
@@ -103,7 +114,10 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
         <p className="message message-error">{loadError}</p>
       ) : (
         <>
-          <h4 className="detail-summary-heading">Chatting management earnings (sexting + customs)</h4>
+          <h4 className="detail-summary-heading">
+            Chatting management earnings (sexting + customs)
+            <InfoHint text="This is all the money made this week from clients paying for chats (sexting) and custom videos. It's shared between Paige and Alex." />
+          </h4>
           <div className="detail-summary">
             <div>
               <p className="label">Company total</p>
@@ -119,7 +133,35 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
             </div>
           </div>
 
-          <h4 className="detail-summary-heading">PM sales (purchases, tips & customs submitted directly)</h4>
+          <h4 className="detail-summary-heading">
+            PM sales (purchases, tips & customs submitted directly)
+            <InfoHint text="This is money from things the owner typed in directly - like purchases and tips - instead of a worker logging them. Split evenly, half to Paige and half to Alex." />
+          </h4>
+          <div className="table-wrapper">
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pmSalesTotalRows.map((row) => (
+                  <tr key={row.clientName}>
+                    <td>{row.clientName}</td>
+                    <td>{formatCurrency(row.total)}</td>
+                  </tr>
+                ))}
+                {pmSalesTotalRows.length === 0 && (
+                  <tr>
+                    <td colSpan={2} className="empty-row">
+                      No PM Sales purchases/tips entries this week.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           <div className="detail-summary">
             <div>
               <p className="label">Company total</p>
@@ -135,14 +177,17 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
             </div>
           </div>
 
-          <h4 className="detail-summary-heading">Sexting commission by client</h4>
+          <h4 className="detail-summary-heading">
+            Chatting management by client (contractor sale entries, sexting + customs)
+            <InfoHint text="This breaks the chatting management money above down by which client it came from - Angel, Lucy, Callie, Sav - and shows Paige and Alex's share for each one. Sav is a special case: Alex gets all of it instead of splitting." />
+          </h4>
           <div className="table-wrapper">
             <table className="detail-table">
               <thead>
                 <tr>
                   <th>Client</th>
-                  <th>Paige sexting</th>
-                  <th>Alex sexting</th>
+                  <th>Paige</th>
+                  <th>Alex</th>
                 </tr>
               </thead>
               <tbody>
@@ -152,8 +197,8 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
                       {row.clientName}
                       {isSavClient(row.clientName) && <span className="info-text"> (100% to Alex)</span>}
                     </td>
-                    <td>{formatCurrency(isSavClient(row.clientName) ? 0 : row.sexting / 2)}</td>
-                    <td>{formatCurrency(isSavClient(row.clientName) ? row.sexting : row.sexting / 2)}</td>
+                    <td>{formatCurrency(row.paigeShare)}</td>
+                    <td>{formatCurrency(row.alexShare)}</td>
                   </tr>
                 ))}
                 {chattingRows.length === 0 && (
@@ -165,27 +210,66 @@ export function PartnerEarningsTab({ clients }: { clients: Client[] }) {
                 )}
                 <tr>
                   <td>
-                    PM Sales — Paige sexting / Alex sexting <span className="info-text">(submitted directly, 100% each)</span>
-                  </td>
-                  <td>{formatCurrency(paigeDirectSexting)}</td>
-                  <td>{formatCurrency(alexDirectSexting)}</td>
-                </tr>
-                <tr>
-                  <td>
                     <strong>Total</strong>
                   </td>
                   <td>
-                    <strong>{formatCurrency(chattingManagementPaige)}</strong>
+                    <strong>{formatCurrency(clientChattingPaige)}</strong>
                   </td>
                   <td>
-                    <strong>{formatCurrency(chattingManagementAlex)}</strong>
+                    <strong>{formatCurrency(clientChattingAlex)}</strong>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <h4 className="detail-summary-heading">Grand total this week</h4>
+          <h4 className="detail-summary-heading">
+            Individual sexting by client (PM Sales, submitted directly)
+            <InfoHint text="These are sexting sales the owner typed in by hand for a specific client, already saying who it belongs to. Unlike the section above, none of this is split 50/50 - each entry goes 100% to whichever partner it was entered for." />
+          </h4>
+          <div className="table-wrapper">
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Paige sexting</th>
+                  <th>Alex sexting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pmSalesSextingRows.map((row) => (
+                  <tr key={row.clientName}>
+                    <td>{row.clientName}</td>
+                    <td>{formatCurrency(row.paige)}</td>
+                    <td>{formatCurrency(row.alex)}</td>
+                  </tr>
+                ))}
+                {pmSalesSextingRows.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="empty-row">
+                      No PM Sales sexting entries this week.
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td>
+                    <strong>Total</strong>
+                  </td>
+                  <td>
+                    <strong>{formatCurrency(paigeDirectSexting)}</strong>
+                  </td>
+                  <td>
+                    <strong>{formatCurrency(alexDirectSexting)}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4 className="detail-summary-heading">
+            Grand total this week
+            <InfoHint text="This is the final answer - everything above added up. This is how much money each person actually gets this week." />
+          </h4>
           <div className="detail-summary">
             <div>
               <p className="label">Paige</p>

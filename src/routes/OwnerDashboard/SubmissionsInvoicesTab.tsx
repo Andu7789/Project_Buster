@@ -80,9 +80,12 @@ export function SubmissionsInvoicesTab({
           {workers
             .filter((worker) => worker.status !== 'removed')
             .map((worker, index) => {
-              const workerTotal = submissions
-                .filter((submission) => submission.worker_id === worker.id)
-                .reduce((sum, submission) => sum + submission.amount, 0)
+              const weekInvoice = submissions.find(
+                (submission) =>
+                  submission.worker_id === worker.id &&
+                  submission.week_start === weekStart &&
+                  submission.week_end === weekEnd,
+              )
               const workerPending = submissions.filter(
                 (submission) => submission.worker_id === worker.id && !submission.dealt_with,
               ).length
@@ -94,7 +97,7 @@ export function SubmissionsInvoicesTab({
                     onClick={() => onSelectWorker(worker.id)}
                   >
                     <strong>{worker.full_name}</strong>
-                    <p>Total submitted: {formatCurrency(workerTotal)}</p>
+                    <p>Invoice total: {formatCurrency(weekInvoice?.amount ?? 0)}</p>
                     <p className={workerPending > 0 ? 'text-danger' : undefined}>
                       {workerPending} pending submission{workerPending === 1 ? '' : 's'}
                     </p>
@@ -212,20 +215,23 @@ export function SubmissionsInvoicesTab({
               </tr>
             </thead>
             <tbody>
-              {clientInvoices.map((invoice) => (
-                <tr key={invoice.id} className="submission-row" onClick={() => onViewInvoice(invoice.id)}>
-                  <td>{clients.find((c) => c.id === invoice.client_id)?.name ?? 'Unknown client'}</td>
-                  <td>{formatWeekRange(invoice.week_start, invoice.week_end)}</td>
-                  <td>{formatCurrency(invoice.owner_cut)}</td>
-                  <td>
-                    <SubmissionStatusBadge dealtWith={invoice.dealt_with} />
-                  </td>
-                </tr>
-              ))}
-              {clientInvoices.length === 0 && (
+              {clientInvoices
+                .filter((invoice) => invoice.week_start === weekStart && invoice.week_end === weekEnd)
+                .map((invoice) => (
+                  <tr key={invoice.id} className="submission-row" onClick={() => onViewInvoice(invoice.id)}>
+                    <td>{clients.find((c) => c.id === invoice.client_id)?.name ?? 'Unknown client'}</td>
+                    <td>{formatWeekRange(invoice.week_start, invoice.week_end)}</td>
+                    <td>{formatCurrency(invoice.owner_cut)}</td>
+                    <td>
+                      <SubmissionStatusBadge dealtWith={invoice.dealt_with} />
+                    </td>
+                  </tr>
+                ))}
+              {clientInvoices.filter((invoice) => invoice.week_start === weekStart && invoice.week_end === weekEnd)
+                .length === 0 && (
                 <tr>
                   <td colSpan={4} className="empty-row">
-                    No client invoices yet.
+                    No client invoices for this week.
                   </td>
                 </tr>
               )}

@@ -42,16 +42,29 @@ function PendingInvoiceRow({
 export function InvoicesTab({
   submissions,
   workers,
+  weekStart,
+  weekEnd,
+  isCurrentWeek,
+  onPreviousWeek,
+  onNextWeek,
+  onJumpToCurrentWeek,
   onDownloadInvoice,
   onMarkPaid,
 }: {
   submissions: Submission[]
   workers: Profile[]
+  weekStart: string
+  weekEnd: string
+  isCurrentWeek: boolean
+  onPreviousWeek: () => void
+  onNextWeek: () => void
+  onJumpToCurrentWeek: () => void
   onDownloadInvoice: (submission: Submission) => void
   onMarkPaid: (submissionId: string) => void
 }) {
-  const pending = submissions.filter((submission) => !submission.paid)
-  const paid = submissions.filter((submission) => submission.paid)
+  const weekSubmissions = submissions.filter((submission) => submission.week_start === weekStart)
+  const pending = weekSubmissions.filter((submission) => !submission.paid)
+  const paid = weekSubmissions.filter((submission) => submission.paid)
 
   return (
     <>
@@ -59,7 +72,24 @@ export function InvoicesTab({
         <div className="panel-head">
           <div>
             <h2>Pending payment</h2>
-            <p>Every worker's weekly invoice, most recent first. Mark one paid once you've sent the money.</p>
+            <p>
+              {isCurrentWeek
+                ? "This week's worker invoices. Mark one paid once you've sent the money."
+                : `${formatWeekRange(weekStart, weekEnd)}'s worker invoices. Mark one paid once you've sent the money.`}
+            </p>
+          </div>
+          <div className="roster-actions">
+            <button type="button" className="btn-outline" onClick={onPreviousWeek}>
+              ← Previous week
+            </button>
+            {!isCurrentWeek && (
+              <button type="button" className="btn-outline" onClick={onJumpToCurrentWeek}>
+                Current week
+              </button>
+            )}
+            <button type="button" className="btn-outline" onClick={onNextWeek} disabled={isCurrentWeek}>
+              Next week →
+            </button>
           </div>
         </div>
 
@@ -87,7 +117,7 @@ export function InvoicesTab({
               {pending.length === 0 && (
                 <tr>
                   <td colSpan={5} className="empty-row">
-                    No unpaid invoices.
+                    No unpaid invoices for this week.
                   </td>
                 </tr>
               )}
@@ -100,7 +130,11 @@ export function InvoicesTab({
         <div className="panel-head">
           <div>
             <h2>Paid invoices</h2>
-            <p>Invoices you've already paid out.</p>
+            <p>
+              {isCurrentWeek
+                ? "Invoices you've already paid out this week."
+                : `Invoices you've already paid out for ${formatWeekRange(weekStart, weekEnd)}.`}
+            </p>
           </div>
         </div>
 
@@ -132,7 +166,7 @@ export function InvoicesTab({
               {paid.length === 0 && (
                 <tr>
                   <td colSpan={5} className="empty-row">
-                    No paid invoices yet.
+                    No paid invoices for this week yet.
                   </td>
                 </tr>
               )}

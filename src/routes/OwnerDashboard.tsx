@@ -1207,6 +1207,12 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
             <InvoicesTab
               submissions={submissions.filter((submission) => submission.invoice_number !== null)}
               workers={workers}
+              weekStart={ownerSubmissionsWeekStart}
+              weekEnd={ownerSubmissionsWeekEnd}
+              isCurrentWeek={ownerSubmissionsWeekStart === currentWeekStart}
+              onPreviousWeek={goToPreviousOwnerInvoicingWeek}
+              onNextWeek={goToNextOwnerInvoicingWeek}
+              onJumpToCurrentWeek={goToCurrentOwnerInvoicingWeek}
               onDownloadInvoice={handleDownloadWorkerInvoicePdf}
               onMarkPaid={handleMarkSubmissionPaid}
             />

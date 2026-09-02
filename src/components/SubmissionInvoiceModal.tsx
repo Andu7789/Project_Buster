@@ -15,6 +15,7 @@ export function SubmissionInvoiceModal({
   onClose,
   onConfirm,
   onDelete,
+  onCreateInvoice,
 }: {
   submission: Submission
   workerName: string
@@ -24,11 +25,14 @@ export function SubmissionInvoiceModal({
   onClose: () => void
   onConfirm: (submissionId: string) => Promise<void>
   onDelete: (submissionId: string) => Promise<void>
+  onCreateInvoice: (submission: Submission) => Promise<void>
 }) {
   const [confirming, setConfirming] = useState(false)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [creatingInvoice, setCreatingInvoice] = useState(false)
+  const [createInvoiceError, setCreateInvoiceError] = useState<string | null>(null)
   const [selectedClient, setSelectedClient] = useState<ClientEarningsTotal | null>(null)
 
   const breakdown = useMemo(() => breakdownByClientAndSection(entries, clients), [entries, clients])
@@ -46,6 +50,18 @@ export function SubmissionInvoiceModal({
       setConfirmError(err instanceof Error ? err.message : 'Could not mark this submission as agreed.')
     } finally {
       setConfirming(false)
+    }
+  }
+
+  async function handleCreateInvoice() {
+    setCreatingInvoice(true)
+    setCreateInvoiceError(null)
+    try {
+      await onCreateInvoice(submission)
+    } catch (err) {
+      setCreateInvoiceError(err instanceof Error ? err.message : 'Could not create this invoice.')
+    } finally {
+      setCreatingInvoice(false)
     }
   }
 
@@ -180,17 +196,22 @@ export function SubmissionInvoiceModal({
 
       {confirmError && <p className="message message-error">{confirmError}</p>}
       {deleteError && <p className="message message-error">{deleteError}</p>}
+      {createInvoiceError && <p className="message message-error">{createInvoiceError}</p>}
 
       <div className="modal-actions modal-actions-split">
-        <button type="button" className="btn-danger" onClick={handleDelete} disabled={deleting || confirming}>
+        <button type="button" className="btn-danger" onClick={handleDelete} disabled={deleting || confirming || creatingInvoice}>
           {deleting ? 'Deleting…' : 'Delete submission'}
         </button>
-        {submission.dealt_with ? (
-          <p className="message message-info">Agreed — ready for this week's owner invoice.</p>
-        ) : (
+        {!submission.dealt_with ? (
           <button type="button" className="btn-primary" onClick={handleConfirm} disabled={confirming || deleting}>
             {confirming ? 'Marking…' : 'Agree'}
           </button>
+        ) : submission.invoice_number === null ? (
+          <button type="button" className="btn-primary" onClick={handleCreateInvoice} disabled={creatingInvoice || deleting}>
+            {creatingInvoice ? 'Creating invoice…' : 'Create invoice'}
+          </button>
+        ) : (
+          <p className="message message-info">Invoice #{submission.invoice_number} sent.</p>
         )}
       </div>
 

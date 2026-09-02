@@ -8,6 +8,7 @@ import {
   addSaleType,
   addWorker,
   createClientInvoice,
+  createInvoiceForSubmission,
   createOwnerSubmissionInvoice,
   deleteClientInvoice,
   deleteOwnerSubmission,
@@ -33,6 +34,7 @@ import {
   markDealtWith,
   markOwnerSubmissionInvoiceDealtWith,
   markSubmissionPaid,
+  notifyTelegram,
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
@@ -844,6 +846,19 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     })
   }
 
+  /** Lets the owner create a worker's invoice themselves, instead of waiting on the worker to press their own button. */
+  async function handleCreateInvoiceForSubmission(submission: Submission) {
+    const invoiced = await createInvoiceForSubmission(submission.id)
+    setSubmissions((previous) => previous.map((entry) => (entry.id === invoiced.id ? invoiced : entry)))
+    await handleDownloadWorkerInvoicePdf(invoiced)
+    void notifyTelegram('worker_invoice_created', {
+      actorName: workers.find((worker) => worker.id === invoiced.worker_id)?.full_name ?? 'Unknown worker',
+      weekStart: invoiced.week_start,
+      weekEnd: invoiced.week_end,
+      amount: invoiced.amount,
+    })
+  }
+
   async function handleDeleteSubmission(submissionId: string) {
     const submission = submissions.find((entry) => entry.id === submissionId)
     await deleteSubmission(submissionId)
@@ -1260,6 +1275,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           onClose={() => setSelectedSubmissionId(null)}
           onConfirm={handleConfirmSubmission}
           onDelete={handleDeleteSubmission}
+          onCreateInvoice={handleCreateInvoiceForSubmission}
         />
       )}
 

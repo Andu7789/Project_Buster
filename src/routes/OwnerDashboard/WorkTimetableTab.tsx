@@ -2,20 +2,36 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { addTimetableShift, deleteTimetableShift, listAllTimetableShifts, updateTimetableShift } from '../../data/queries'
 import { daysOfWeek } from '../../lib/dates'
 import { clientColorVars } from '../../lib/clientColor'
+import { formatShiftLabel, SHIFT_PRESETS, shiftPresetKey } from '../../lib/timetable'
 import type { Client, DayShift, Profile, TimetableShift } from '../../types'
 
-/** Blank start and end (rather than a separate Off toggle) means the day is off. */
+/** No shift selected (rather than a separate Off toggle) means the day is off. Falls back to
+ * showing a row's existing value as its own option if it predates the fixed preset blocks, so
+ * saving the row again doesn't silently rewrite it to one of the four presets. */
 function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (value: DayShift | undefined) => void }) {
-  function commit(start: string, end: string) {
-    onChange(start || end ? { start, end } : undefined)
+  const currentKey = value ? shiftPresetKey(value) : ''
+  const isKnownPreset = SHIFT_PRESETS.some((preset) => shiftPresetKey(preset) === currentKey)
+
+  function handleChange(key: string) {
+    if (!key) {
+      onChange(undefined)
+      return
+    }
+    const preset = SHIFT_PRESETS.find((preset) => shiftPresetKey(preset) === key)
+    if (preset) onChange(preset)
   }
 
   return (
     <div className="timetable-day-cell">
-      <div className="timetable-time-inputs">
-        <input type="time" value={value?.start ?? ''} onChange={(event) => commit(event.target.value, value?.end ?? '')} />
-        <input type="time" value={value?.end ?? ''} onChange={(event) => commit(value?.start ?? '', event.target.value)} />
-      </div>
+      <select value={currentKey} onChange={(event) => handleChange(event.target.value)}>
+        <option value="">Off</option>
+        {SHIFT_PRESETS.map((preset) => (
+          <option key={shiftPresetKey(preset)} value={shiftPresetKey(preset)}>
+            {formatShiftLabel(preset)}
+          </option>
+        ))}
+        {value && !isKnownPreset && <option value={currentKey}>{formatShiftLabel(value)}</option>}
+      </select>
     </div>
   )
 }

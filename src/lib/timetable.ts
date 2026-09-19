@@ -15,3 +15,15 @@ export function formatShiftLabel(shift: DayShift | undefined): string {
   if (!shift) return 'Off'
   return `${formatClockTime(shift.start)} – ${formatClockTime(shift.end)}`
 }
+
+/** The fixed blocks the owner picks a day's shift from, instead of typing arbitrary times. */
+export const SHIFT_PRESETS: DayShift[] = [
+  { start: '06:00', end: '12:00' },
+  { start: '12:00', end: '17:00' },
+  { start: '17:00', end: '00:00' },
+  { start: '00:00', end: '06:00' },
+]
+
+export function shiftPresetKey(shift: DayShift): string {
+  return `${shift.start}-${shift.end}`
+}

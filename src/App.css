@@ -1019,12 +1019,7 @@ a:focus-visible {
   min-width: 130px;
 }
 
-.timetable-time-inputs {
-  display: flex;
-  gap: 6px;
-}
-
-.timetable-time-inputs input {
+.timetable-day-cell select {
   width: 100%;
   padding: 6px 8px;
 }

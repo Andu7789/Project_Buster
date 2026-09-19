@@ -1024,6 +1024,10 @@ a:focus-visible {
   padding: 6px 8px;
 }
 
+.timetable-week-boundary {
+  border-left: 2px solid var(--border);
+}
+
 .owner-submission-add-row {
   display: grid;
   grid-template-columns: 140px minmax(85px, 140px) 113px 100px 113px minmax(140px, auto) auto;

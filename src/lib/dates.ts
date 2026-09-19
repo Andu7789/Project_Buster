@@ -15,6 +15,13 @@ export function formatDayLabel(day: string, isoDate: string): string {
   return `${day}, ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
 }
 
+/** Which entry of `daysOfWeek` an ISO date falls on. */
+export function dayNameForDate(isoDate: string): string {
+  const date = new Date(isoDate)
+  const dayIndex = (date.getDay() + 6) % 7 // 0 = Monday ... 6 = Sunday
+  return daysOfWeek[dayIndex]
+}
+
 export function toISODate(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -55,6 +62,23 @@ export function getNextWeekRange(weekStart: string): { weekStart: string; weekEn
 export function isWithinGracePeriod(reference: Date = new Date()): boolean {
   const dayIndex = (reference.getDay() + 6) % 7 // 0 = Monday ... 6 = Sunday
   return dayIndex <= 2
+}
+
+export interface TimetableWeek {
+  weekStart: string
+  weekEnd: string
+  dates: string[]
+}
+
+/** The two weeks (this week, then next) the Work Timetable always shows - no navigation, it
+ * just rolls forward a day at a time as "today" changes. */
+export function getTimetableWeeks(reference: Date = new Date()): [TimetableWeek, TimetableWeek] {
+  const week1Range = getCurrentWeekRange(reference)
+  const week2Range = getNextWeekRange(week1Range.weekStart)
+  return [
+    { ...week1Range, dates: getWeekDates(week1Range.weekStart) },
+    { ...week2Range, dates: getWeekDates(week2Range.weekStart) },
+  ]
 }
 
 export function formatWeekRange(weekStart: string, weekEnd: string): string {

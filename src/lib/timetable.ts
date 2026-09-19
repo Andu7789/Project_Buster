@@ -1,4 +1,5 @@
-import type { DayShift } from '../types'
+import { dayNameForDate } from './dates'
+import type { DayShift, TimetableShift } from '../types'
 
 /** "13:00" -> "1pm", "13:30" -> "1:30pm", "00:00" -> "12am". */
 function formatClockTime(value: string): string {
@@ -26,4 +27,11 @@ export const SHIFT_PRESETS: DayShift[] = [
 
 export function shiftPresetKey(shift: DayShift): string {
   return `${shift.start}-${shift.end}`
+}
+
+/** A date's shift, falling back to the old day-name-keyed entry (e.g. "Monday") from before
+ * the timetable showed two dated weeks, so a recurring pattern set under the old system still
+ * pre-fills both weeks until the owner customises one of them for its own specific date. */
+export function shiftForDate(shifts: TimetableShift['shifts'], isoDate: string): DayShift | undefined {
+  return shifts[isoDate] ?? shifts[dayNameForDate(isoDate)]
 }

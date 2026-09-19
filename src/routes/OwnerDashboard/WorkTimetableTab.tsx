@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { addTimetableShift, deleteTimetableShift, listAllTimetableShifts, updateTimetableShift } from '../../data/queries'
-import { daysOfWeek } from '../../lib/dates'
+import { daysOfWeek, formatWeekRange, getTimetableWeeks, type TimetableWeek } from '../../lib/dates'
 import { clientColorVars } from '../../lib/clientColor'
-import { formatShiftLabel, SHIFT_PRESETS, shiftPresetKey } from '../../lib/timetable'
+import { formatShiftLabel, shiftForDate, SHIFT_PRESETS, shiftPresetKey } from '../../lib/timetable'
 import type { Client, DayShift, Profile, TimetableShift } from '../../types'
 
 /** No shift selected (rather than a separate Off toggle) means the day is off. Falls back to
@@ -36,28 +36,43 @@ function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (
   )
 }
 
+/** Seeds one draft entry per date across both weeks, keyed by the actual ISO date rather than
+ * day name, so week 1 and week 2 can hold different shifts even on the same weekday. */
+function buildDraft(shifts: TimetableShift['shifts'], week1: TimetableWeek, week2: TimetableWeek): Record<string, DayShift> {
+  const draft: Record<string, DayShift> = {}
+  for (const date of [...week1.dates, ...week2.dates]) {
+    const value = shiftForDate(shifts, date)
+    if (value) draft[date] = value
+  }
+  return draft
+}
+
 function TimetableRow({
   row,
   workerName,
+  week1,
+  week2,
   onSave,
   onRemove,
 }: {
   row: TimetableShift
   workerName: string
+  week1: TimetableWeek
+  week2: TimetableWeek
   onSave: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
   onRemove: (rowId: string) => void
 }) {
-  const [draft, setDraft] = useState<Record<string, DayShift>>(row.shifts)
+  const [draft, setDraft] = useState<Record<string, DayShift>>(() => buildDraft(row.shifts, week1, week2))
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function setDay(day: string, value: DayShift | undefined) {
+  function setDay(date: string, value: DayShift | undefined) {
     setDraft((previous) => {
       const next = { ...previous }
-      if (value) next[day] = value
-      else delete next[day]
+      if (value) next[date] = value
+      else delete next[date]
       return next
     })
     setDirty(true)
@@ -81,9 +96,14 @@ function TimetableRow({
   return (
     <tr>
       <td>{workerName}</td>
-      {daysOfWeek.map((day) => (
-        <td key={day}>
-          <DayCell value={draft[day]} onChange={(value) => setDay(day, value)} />
+      {week1.dates.map((date) => (
+        <td key={date}>
+          <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
+        </td>
+      ))}
+      {week2.dates.map((date, index) => (
+        <td key={date} className={index === 0 ? 'timetable-week-boundary' : undefined}>
+          <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
         </td>
       ))}
       <td>
@@ -107,6 +127,8 @@ function ClientTimetableSection({
   activeWorkers,
   workers,
   rows,
+  week1,
+  week2,
   onAdd,
   onSaveRow,
   onRemoveRow,
@@ -115,6 +137,8 @@ function ClientTimetableSection({
   activeWorkers: Profile[]
   workers: Profile[]
   rows: TimetableShift[]
+  week1: TimetableWeek
+  week2: TimetableWeek
   onAdd: (clientId: string, workerId: string) => Promise<void>
   onSaveRow: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
   onRemoveRow: (rowId: string) => void
@@ -170,11 +194,22 @@ function ClientTimetableSection({
         <table className="detail-table">
           <thead>
             <tr>
-              <th>Contractor</th>
+              <th rowSpan={2}>Contractor</th>
+              <th colSpan={daysOfWeek.length}>{formatWeekRange(week1.weekStart, week1.weekEnd)}</th>
+              <th colSpan={daysOfWeek.length} className="timetable-week-boundary">
+                {formatWeekRange(week2.weekStart, week2.weekEnd)}
+              </th>
+              <th rowSpan={2}></th>
+            </tr>
+            <tr>
               {daysOfWeek.map((day) => (
-                <th key={day}>{day}</th>
+                <th key={`w1-${day}`}>{day}</th>
               ))}
-              <th></th>
+              {daysOfWeek.map((day, index) => (
+                <th key={`w2-${day}`} className={index === 0 ? 'timetable-week-boundary' : undefined}>
+                  {day}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -183,13 +218,15 @@ function ClientTimetableSection({
                 key={row.id}
                 row={row}
                 workerName={workers.find((worker) => worker.id === row.worker_id)?.full_name ?? 'Unknown'}
+                week1={week1}
+                week2={week2}
                 onSave={onSaveRow}
                 onRemove={onRemoveRow}
               />
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={daysOfWeek.length + 2} className="empty-row">
+                <td colSpan={daysOfWeek.length * 2 + 2} className="empty-row">
                   No contractors added yet for this client.
                 </td>
               </tr>
@@ -208,6 +245,7 @@ export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; cli
 
   const activeWorkers = workers.filter((worker) => worker.status === 'active')
   const activeClients = clients.filter((client) => client.active)
+  const [week1, week2] = getTimetableWeeks()
 
   useEffect(() => {
     let cancelled = false
@@ -269,6 +307,8 @@ export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; cli
           activeWorkers={activeWorkers}
           workers={workers}
           rows={rows.filter((row) => row.client_id === client.id)}
+          week1={week1}
+          week2={week2}
           onAdd={handleAdd}
           onSaveRow={handleSaveRow}
           onRemoveRow={handleRemoveRow}

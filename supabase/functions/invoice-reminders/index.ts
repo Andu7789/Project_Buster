@@ -30,6 +30,25 @@ function addInterval(from: Date, frequency: string): Date {
   return next
 }
 
+function atUTCMidnight(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
+/**
+ * The next scheduled due date on or after `today` - anchored at the last invoice date (or,
+ * if never invoiced, at signup so the first cycle is due right away) and stepped forward by
+ * whole cadence intervals so it lands on the client's actual recurring schedule rather than
+ * drifting. Callers should only remind when this equals `today` exactly, so an overdue client
+ * pings again once per cadence instead of every single day until they're actually invoiced.
+ */
+function nextDueDate(anchorIso: string, frequency: string, today: Date): Date {
+  let due = atUTCMidnight(new Date(anchorIso))
+  while (due.getTime() < today.getTime()) {
+    due = addInterval(due, frequency)
+  }
+  return due
+}
+
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
@@ -53,15 +72,15 @@ Deno.serve(async (req) => {
 
     if (error) throw error
 
-    const today = new Date()
+    const today = atUTCMidnight(new Date())
     const dueLines: string[] = []
 
     for (const serviceClient of serviceClients ?? []) {
       const frequency = serviceClient.invoice_frequency as string
-      // Never invoiced yet - due right away rather than waiting a full cycle from signup.
-      const dueDate = serviceClient.last_invoiced_at ? addInterval(new Date(serviceClient.last_invoiced_at), frequency) : today
+      const anchor = serviceClient.last_invoiced_at ?? serviceClient.created_at
+      const dueDate = nextDueDate(anchor, frequency, today)
 
-      if (dueDate <= today) {
+      if (dueDate.getTime() === today.getTime()) {
         const lastInvoiced = serviceClient.last_invoiced_at ? formatShortDate(serviceClient.last_invoiced_at) : 'never'
         dueLines.push(`- ${serviceClient.name} (${FREQUENCY_LABEL[frequency] ?? frequency}) - last invoiced ${lastInvoiced}`)
       }

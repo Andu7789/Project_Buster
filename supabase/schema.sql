@@ -368,7 +368,7 @@ create table if not exists buster_owner_submission_invoices (
 -- invoice, distinct from buster_client_invoices' sexting/PPV commission breakdown.
 create table if not exists buster_service_invoices (
   id uuid primary key default gen_random_uuid(),
-  invoice_number integer not null unique,
+  invoice_number integer not null,
   bill_to text not null,
   date_issued date not null,
   date_due date not null,
@@ -383,6 +383,21 @@ create table if not exists buster_service_invoices (
 -- typed before this migration, or one that doesn't match either roster, still has to save.
 alter table buster_service_invoices add column if not exists client_id uuid references buster_clients(id);
 alter table buster_service_invoices add column if not exists service_client_id uuid references buster_service_clients(id);
+
+-- Migration: invoice numbering became per-client (buster_clients.next_invoice_number /
+-- buster_service_clients.next_invoice_number above), so different clients legitimately share
+-- invoice_number values (e.g. two different clients both have their own "#1") - but the
+-- original table-wide UNIQUE(invoice_number) constraint still blocked that, so any client's
+-- first invoice would fail once another client had already used that number. Replace it with
+-- uniqueness scoped to whichever client the invoice belongs to; pre-migration rows with
+-- neither client_id nor service_client_id set stay unconstrained, same as documented above.
+alter table buster_service_invoices drop constraint if exists buster_service_invoices_invoice_number_key;
+
+create unique index if not exists buster_service_invoices_client_invoice_number_idx
+  on buster_service_invoices (client_id, invoice_number) where client_id is not null;
+
+create unique index if not exists buster_service_invoices_service_client_invoice_number_idx
+  on buster_service_invoices (service_client_id, invoice_number) where service_client_id is not null;
 
 -- Singleton settings row holding the next invoice number to assign - owner-editable
 -- so they can set where the sequence starts (e.g. to continue numbering from invoices

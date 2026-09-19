@@ -36,6 +36,12 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** Saved invoice filenames read as "<Client name> Invoice <number>.pdf" - strip characters Windows/macOS forbid in filenames. */
+function invoiceFilename(billToName: string, invoiceNumber: number): string {
+  const safeName = billToName.replace(/[\\/:*?"<>|]/g, '').trim()
+  return `${safeName || 'Client'} Invoice ${invoiceNumber}.pdf`
+}
+
 const PINK: [number, number, number] = [233, 114, 156]
 const PINK_LIGHT: [number, number, number] = [255, 229, 238]
 const INK: [number, number, number] = [30, 30, 30]
@@ -171,7 +177,6 @@ function renderDailyTable(doc: jsPDF, title: string, rows: DailyEntryRow[], star
  * internal reference pages, not shown to the client.
  */
 export async function generateOwnerInvoicePdf(input: {
-  clientName: string
   weekStart: string
   weekEnd: string
   ownerSubmissionsCut: number
@@ -349,7 +354,7 @@ export async function generateOwnerInvoicePdf(input: {
   y3 = renderCategoryTable(doc, 'Purchases', purchaseRows, 'No purchases recorded for this client this week.', y3)
   renderCategoryTable(doc, 'Tips', tipRows, 'No tips recorded for this client this week.', y3)
 
-  doc.save(`owner-invoice-${input.clientName.replace(/\s+/g, '-').toLowerCase()}-${input.weekStart}.pdf`)
+  doc.save(invoiceFilename(input.billToName, input.invoiceNumber))
 }
 
 /** The business name a worker's invoice is addressed to - fixed, matches the paper template this mirrors. */
@@ -534,5 +539,5 @@ export async function generateServiceInvoicePdf(input: {
   doc.line(110, totalOwedCenterY + 22, 196, totalOwedCenterY + 22)
   doc.line(110, totalOwedCenterY + 28, 196, totalOwedCenterY + 28)
 
-  doc.save(`service-invoice-${input.invoiceNumber}.pdf`)
+  doc.save(invoiceFilename(input.billToName, input.invoiceNumber))
 }

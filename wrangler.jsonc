@@ -2,8 +2,24 @@
   "name": "project-buster",
   "account_id": "946d49d79eb4d6e6da2fc67750ba3959",
   "compatibility_date": "2026-08-14",
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  // SUPABASE_ANON_KEY is the public/publishable anon key (same one VITE_SUPABASE_ANON_KEY
+  // ships in the built frontend bundle already) - not a secret, safe to check in here. It's
+  // only used by worker/index.ts's daily Cron Trigger to call the invoice-reminders edge
+  // function; Supabase's own service-role key (never exposed here) is what that function uses
+  // internally to actually read/write the database.
+  "vars": {
+    "SUPABASE_URL": "https://rmooksnngqyzqraeicvr.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtb29rc25uZ3F5enFyYWVpY3ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3OTU2NDgsImV4cCI6MjA4NTM3MTY0OH0.N4COImAWUpLz7yS4OJM4Tgsew-On6s_5ee0_F6pw3-c"
+  },
+  // Runs invoice-reminders once a day at 09:00 UTC - checks every active Service client's
+  // invoice_frequency and pings Telegram if any are due to be invoiced.
+  "triggers": {
+    "crons": ["0 9 * * *"]
   }
 }

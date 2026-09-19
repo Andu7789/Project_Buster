@@ -1,4 +1,4 @@
-import type { PaymentMethodType } from '../types'
+import type { InvoiceFrequency, PaymentMethodType } from '../types'
 
 export const paymentMethods: PaymentMethodType[] = ['bank', 'wise', 'paypal']
 
@@ -6,6 +6,14 @@ export const paymentMethodLabel: Record<PaymentMethodType, string> = {
   bank: 'UK Bank Transfer',
   wise: 'WISE',
   paypal: 'PayPal',
+}
+
+export const invoiceFrequencies: InvoiceFrequency[] = ['weekly', 'biweekly', 'monthly']
+
+export const invoiceFrequencyLabel: Record<InvoiceFrequency, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Bi-weekly',
+  monthly: 'Monthly',
 }
 
 export const paymentMethodFields: Record<PaymentMethodType, { key: string; label: string }[]> = {

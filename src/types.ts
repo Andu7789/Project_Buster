@@ -59,6 +59,22 @@ export interface Client {
   created_at: string
 }
 
+export type InvoiceFrequency = 'weekly' | 'biweekly' | 'monthly'
+
+/** A client who only buys standalone services (GG Swaps/SFS/admin) - no color, no OnlyFans-
+ * management commission split. Distinct from Client so a name can appear in both (e.g. a
+ * management client who also buys GG Swaps) without forcing a color/commission setup on them. */
+export interface ServiceClient {
+  id: string
+  name: string
+  payment_method: PaymentMethodType | null
+  invoice_frequency: InvoiceFrequency | null
+  next_invoice_number: number
+  last_invoiced_at: string | null
+  active: boolean
+  created_at: string
+}
+
 /** The owner's own payout details for a method (bank/WISE/PayPal) - a fixed set of 3 rows, owner-only. */
 export interface PaymentMethod {
   id: string
@@ -199,6 +215,8 @@ export interface ServiceInvoice {
   id: string
   invoice_number: number
   bill_to: string
+  client_id: string | null
+  service_client_id: string | null
   date_issued: string
   date_due: string
   line_items: ServiceInvoiceLineItem[]

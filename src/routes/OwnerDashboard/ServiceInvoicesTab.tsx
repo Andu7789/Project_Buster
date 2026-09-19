@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react'
 import {
   createServiceInvoice,
-  getNextServiceInvoiceNumber,
+  listClients,
+  listServiceClients,
   listServiceInvoices,
-  updateNextServiceInvoiceNumber,
+  markServiceClientInvoiced,
+  updateClientNextInvoiceNumber,
 } from '../../data/queries'
 import { toISODate } from '../../lib/dates'
 import { generateServiceInvoicePdf } from '../../lib/invoicePdf'
 import {
   CUSTOM_SERVICE_DESCRIPTIONS,
+  CUSTOM_SERVICE_OPTION,
   GG_SWAPS_PRESETS,
   presetForDescription,
   SFS_PRESETS,
 } from '../../lib/serviceInvoicePresets'
-import type { ServiceInvoice, ServiceInvoiceLineItem } from '../../types'
+import type { Client, ServiceClient, ServiceInvoice, ServiceInvoiceLineItem } from '../../types'
 
 function formatGbp(amountGbp: number): string {
   return `£${amountGbp.toFixed(2)}`
@@ -23,19 +26,26 @@ function formatDateDisplay(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** Either roster a "bill to" name can resolve to - whichever one it came from is whose
+ * next_invoice_number gets used and advanced, so a client billed from both (e.g. a PM client
+ * who also buys GG Swaps) shares one running invoice sequence across both invoice types. */
+type BillToTarget = { kind: 'client'; record: Client } | { kind: 'serviceClient'; record: ServiceClient }
+
 export function ServiceInvoicesTab() {
   const [invoices, setInvoices] = useState<ServiceInvoice[]>([])
-  const [nextInvoiceNumber, setNextInvoiceNumber] = useState<number | null>(null)
+  const [clients, setClients] = useState<Client[]>([])
+  const [serviceClients, setServiceClients] = useState<ServiceClient[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([listServiceInvoices(), getNextServiceInvoiceNumber()])
-      .then(([invoiceData, nextNumber]) => {
+    Promise.all([listServiceInvoices(), listClients(), listServiceClients()])
+      .then(([invoiceData, clientData, serviceClientData]) => {
         if (cancelled) return
         setInvoices(invoiceData)
-        setNextInvoiceNumber(nextNumber)
+        setClients(clientData)
+        setServiceClients(serviceClientData)
         setLoadError(null)
       })
       .catch((err) => {
@@ -50,37 +60,39 @@ export function ServiceInvoicesTab() {
     }
   }, [])
 
-  const [nextNumberDraft, setNextNumberDraft] = useState('')
-  const [syncedNextNumber, setSyncedNextNumber] = useState<number | null>(null)
-  if (nextInvoiceNumber !== syncedNextNumber) {
-    setSyncedNextNumber(nextInvoiceNumber)
-    setNextNumberDraft(nextInvoiceNumber === null ? '' : String(nextInvoiceNumber))
-  }
+  const billToNames = Array.from(
+    new Set([
+      ...clients.filter((client) => client.active).map((client) => client.name),
+      ...serviceClients.filter((serviceClient) => serviceClient.active).map((serviceClient) => serviceClient.name),
+    ]),
+  ).sort((a, b) => a.localeCompare(b))
 
-  async function saveNextNumber() {
-    const value = Number(nextNumberDraft)
-    if (!Number.isFinite(value) || value < 1 || Math.trunc(value) !== value) {
-      setNextNumberDraft(String(nextInvoiceNumber))
-      return
-    }
-    if (value === nextInvoiceNumber) return
-    await updateNextServiceInvoiceNumber(value)
-    setNextInvoiceNumber(value)
+  function resolveBillTo(name: string): BillToTarget | null {
+    const client = clients.find((entry) => entry.name === name)
+    if (client) return { kind: 'client', record: client }
+    const serviceClient = serviceClients.find((entry) => entry.name === name)
+    if (serviceClient) return { kind: 'serviceClient', record: serviceClient }
+    return null
   }
 
   const [billTo, setBillTo] = useState('')
   const [dateDue, setDateDue] = useState('')
   const [lineItems, setLineItems] = useState<ServiceInvoiceLineItem[]>([])
   const [selectedDescription, setSelectedDescription] = useState('')
+  const [customDescriptionDraft, setCustomDescriptionDraft] = useState('')
   const [amountDraft, setAmountDraft] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
 
+  const billToTarget = billTo ? resolveBillTo(billTo) : null
+
   const selectedPreset = presetForDescription(selectedDescription)
   const isCustomSelection = CUSTOM_SERVICE_DESCRIPTIONS.includes(selectedDescription)
+  const isOtherSelection = selectedDescription === CUSTOM_SERVICE_OPTION
 
   function handleSelectDescription(description: string) {
     setSelectedDescription(description)
+    setCustomDescriptionDraft('')
     const preset = presetForDescription(description)
     setAmountDraft(preset ? preset.amountGbp.toFixed(2) : '')
   }
@@ -91,13 +103,19 @@ export function ServiceInvoicesTab() {
       setFormError('Choose a service.')
       return
     }
+    const description = isOtherSelection ? customDescriptionDraft.trim() : selectedDescription
+    if (!description) {
+      setFormError('Enter a description.')
+      return
+    }
     const amountValue = Number(amountDraft)
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setFormError('Enter a valid amount.')
       return
     }
-    setLineItems((current) => [...current, { description: selectedDescription, amountGbp: amountValue }])
+    setLineItems((current) => [...current, { description, amountGbp: amountValue }])
     setSelectedDescription('')
+    setCustomDescriptionDraft('')
     setAmountDraft('')
   }
 
@@ -109,8 +127,13 @@ export function ServiceInvoicesTab() {
 
   async function handleGenerate() {
     setFormError(null)
-    if (!billTo.trim()) {
-      setFormError('Enter who this invoice is for.')
+    if (!billTo) {
+      setFormError('Choose who this invoice is for.')
+      return
+    }
+    const target = resolveBillTo(billTo)
+    if (!target) {
+      setFormError('Could not find that client - try choosing them again.')
       return
     }
     if (!dateDue) {
@@ -121,17 +144,16 @@ export function ServiceInvoicesTab() {
       setFormError('Add at least one service.')
       return
     }
-    if (nextInvoiceNumber === null) {
-      setFormError('Still loading the next invoice number - try again in a moment.')
-      return
-    }
 
     setGenerating(true)
     try {
       const dateIssued = toISODate(new Date())
+      const invoiceNumber = target.record.next_invoice_number
       const invoice = await createServiceInvoice({
-        invoiceNumber: nextInvoiceNumber,
-        billTo: billTo.trim(),
+        invoiceNumber,
+        billTo,
+        billToClientId: target.kind === 'client' ? target.record.id : null,
+        billToServiceClientId: target.kind === 'serviceClient' ? target.record.id : null,
         dateIssued,
         dateDue,
         lineItems,
@@ -145,8 +167,19 @@ export function ServiceInvoicesTab() {
         lineItems: invoice.line_items,
         totalGbp: invoice.total_gbp,
       })
+
+      if (target.kind === 'client') {
+        const updated = await updateClientNextInvoiceNumber(target.record.id, invoiceNumber + 1)
+        setClients((previous) => previous.map((c) => (c.id === updated.id ? updated : c)))
+      } else {
+        const updated = await markServiceClientInvoiced(target.record.id, {
+          nextInvoiceNumber: invoiceNumber + 1,
+          lastInvoicedAt: dateIssued,
+        })
+        setServiceClients((previous) => previous.map((c) => (c.id === updated.id ? updated : c)))
+      }
+
       setInvoices((current) => [invoice, ...current])
-      setNextInvoiceNumber(nextInvoiceNumber + 1)
       setBillTo('')
       setDateDue('')
       setLineItems([])
@@ -172,31 +205,30 @@ export function ServiceInvoicesTab() {
         <p className="message message-error">{loadError}</p>
       ) : (
         <>
-          <div className="roster-actions service-invoice-settings-row">
-            <label>
-              Next invoice number
-              <input
-                type="number"
-                min="1"
-                step="1"
-                className="gross-input"
-                value={nextNumberDraft}
-                onChange={(event) => setNextNumberDraft(event.target.value)}
-                onBlur={saveNextNumber}
-              />
-            </label>
-          </div>
-
           <form className="add-worker-form" onSubmit={(event) => event.preventDefault()}>
             <label>
               Bill to
-              <input value={billTo} onChange={(event) => setBillTo(event.target.value)} placeholder="Customer name" />
+              <select value={billTo} onChange={(event) => setBillTo(event.target.value)}>
+                <option value="">Choose a client…</option>
+                {billToNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Date due
               <input type="date" value={dateDue} onChange={(event) => setDateDue(event.target.value)} />
             </label>
           </form>
+
+          {billToTarget && (
+            <p className="info-text">
+              This will be invoice #{billToTarget.record.next_invoice_number} for {billTo} - continuing their own invoice sequence
+              {billToTarget.kind === 'client' ? ' (shared with their PM invoices).' : '.'}
+            </p>
+          )}
 
           <div className="table-wrapper">
             <table className="detail-table">
@@ -261,8 +293,18 @@ export function ServiceInvoicesTab() {
                     {description}
                   </option>
                 ))}
+                <option value={CUSTOM_SERVICE_OPTION}>{CUSTOM_SERVICE_OPTION}</option>
               </optgroup>
             </select>
+            {isOtherSelection && (
+              <input
+                type="text"
+                className="gross-input"
+                placeholder="Description"
+                value={customDescriptionDraft}
+                onChange={(event) => setCustomDescriptionDraft(event.target.value)}
+              />
+            )}
             <input
               type="number"
               min="0"

@@ -8,6 +8,7 @@ import type {
   CustomOrderType,
   DayShift,
   DevRequest,
+  InvoiceFrequency,
   OwnerSubmission,
   OwnerSubmissionCategory,
   OwnerSubmissionInvoice,
@@ -22,6 +23,7 @@ import type {
   SaleEntry,
   SaleSection,
   SaleType,
+  ServiceClient,
   ServiceInvoice,
   ServiceInvoiceLineItem,
   Submission,
@@ -462,6 +464,97 @@ export async function updateClientNextInvoiceNumber(clientId: string, nextInvoic
 
   if (error) throw error
   return data as Client
+}
+
+export async function listServiceClients(): Promise<ServiceClient[]> {
+  const client = requireClient()
+  const { data, error } = await client.from('buster_service_clients').select('*').order('name', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as ServiceClient[]
+}
+
+export async function addServiceClient(
+  name: string,
+  input: { paymentMethod: PaymentMethodType | null; invoiceFrequency: InvoiceFrequency | null },
+): Promise<ServiceClient> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_clients')
+    .insert({ name: name.trim(), payment_method: input.paymentMethod, invoice_frequency: input.invoiceFrequency })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as ServiceClient
+}
+
+export async function setServiceClientActive(serviceClientId: string, active: boolean): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_service_clients').update({ active }).eq('id', serviceClientId)
+  if (error) throw error
+}
+
+export async function updateServiceClientPaymentMethod(
+  serviceClientId: string,
+  paymentMethod: PaymentMethodType | null,
+): Promise<ServiceClient> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_clients')
+    .update({ payment_method: paymentMethod })
+    .eq('id', serviceClientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as ServiceClient
+}
+
+export async function updateServiceClientInvoiceFrequency(
+  serviceClientId: string,
+  invoiceFrequency: InvoiceFrequency | null,
+): Promise<ServiceClient> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_clients')
+    .update({ invoice_frequency: invoiceFrequency })
+    .eq('id', serviceClientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as ServiceClient
+}
+
+export async function updateServiceClientNextInvoiceNumber(serviceClientId: string, nextInvoiceNumber: number): Promise<ServiceClient> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_clients')
+    .update({ next_invoice_number: nextInvoiceNumber })
+    .eq('id', serviceClientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as ServiceClient
+}
+
+/** Advances a service client's invoice sequence and records today as their last-invoiced date,
+ * in one update - called right after generating a service invoice billed to them (see
+ * ServiceInvoicesTab), so the invoice-reminders schedule knows they're no longer overdue. */
+export async function markServiceClientInvoiced(
+  serviceClientId: string,
+  input: { nextInvoiceNumber: number; lastInvoicedAt: string },
+): Promise<ServiceClient> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_service_clients')
+    .update({ next_invoice_number: input.nextInvoiceNumber, last_invoiced_at: input.lastInvoicedAt })
+    .eq('id', serviceClientId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as ServiceClient
 }
 
 export async function listPaymentMethods(): Promise<PaymentMethod[]> {
@@ -1136,27 +1229,18 @@ export async function listServiceInvoices(): Promise<ServiceInvoice[]> {
   return (data ?? []) as ServiceInvoice[]
 }
 
-/** The next invoice number to assign - a single owner-editable settings row (see supabase/schema.sql). */
-export async function getNextServiceInvoiceNumber(): Promise<number> {
-  const client = requireClient()
-  const { data, error } = await client.from('buster_service_invoice_settings').select('next_invoice_number').single()
-  if (error) throw error
-  return (data as { next_invoice_number: number }).next_invoice_number
-}
-
-export async function updateNextServiceInvoiceNumber(nextInvoiceNumber: number): Promise<void> {
-  const client = requireClient()
-  const { error } = await client
-    .from('buster_service_invoice_settings')
-    .update({ next_invoice_number: nextInvoiceNumber, updated_at: new Date().toISOString() })
-    .eq('id', true)
-
-  if (error) throw error
-}
-
+/**
+ * Numbered per-client rather than by a single shared sequence - see
+ * buster_clients.next_invoice_number / buster_service_clients.next_invoice_number (whichever
+ * table `billToClientId`/`billToServiceClientId` points at). Advancing that number and (for a
+ * service client) recording last_invoiced_at is the caller's job, via updateClientNextInvoiceNumber
+ * or markServiceClientInvoiced, once the invoice number used here is confirmed created.
+ */
 export async function createServiceInvoice(input: {
   invoiceNumber: number
   billTo: string
+  billToClientId: string | null
+  billToServiceClientId: string | null
   dateIssued: string
   dateDue: string
   lineItems: ServiceInvoiceLineItem[]
@@ -1168,6 +1252,8 @@ export async function createServiceInvoice(input: {
     .insert({
       invoice_number: input.invoiceNumber,
       bill_to: input.billTo,
+      client_id: input.billToClientId,
+      service_client_id: input.billToServiceClientId,
       date_issued: input.dateIssued,
       date_due: input.dateDue,
       line_items: input.lineItems,
@@ -1177,7 +1263,6 @@ export async function createServiceInvoice(input: {
     .single()
 
   if (error) throw error
-  await updateNextServiceInvoiceNumber(input.invoiceNumber + 1)
   return data as ServiceInvoice
 }
 
@@ -1187,7 +1272,7 @@ export async function createServiceInvoice(input: {
  * blocks the request/comment/status-update it's reporting on.
  */
 export async function notifyTelegram(
-  event: 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed' | 'worker_invoice_created',
+  event: 'request_created' | 'status_changed' | 'comment_added' | 'customer_order_completed',
   payload: Record<string, unknown>,
 ): Promise<void> {
   const client = requireClient()

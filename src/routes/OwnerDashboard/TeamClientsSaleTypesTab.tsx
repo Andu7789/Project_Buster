@@ -1,8 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { ProfileStatusBadge } from '../../components/StatusBadge'
 import { ClientColorPicker } from '../../components/ClientColorPicker'
-import { paymentMethodLabel, paymentMethods as paymentMethodOptions } from '../../lib/paymentMethods'
-import type { Client, PaymentMethodType, Profile, ProfileStatus, SaleType } from '../../types'
+import {
+  invoiceFrequencies as invoiceFrequencyOptions,
+  invoiceFrequencyLabel,
+  paymentMethodLabel,
+  paymentMethods as paymentMethodOptions,
+} from '../../lib/paymentMethods'
+import type { Client, InvoiceFrequency, PaymentMethodType, Profile, ProfileStatus, SaleType, ServiceClient } from '../../types'
 
 function ClientRow({
   clientRow,
@@ -123,6 +128,97 @@ function ClientRow({
         <div className="roster-actions">
           <button type="button" className="btn-outline" onClick={() => onToggleClient(clientRow)}>
             {clientRow.active ? 'Deactivate' : 'Activate'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function formatLastInvoiced(lastInvoicedAt: string | null): string {
+  if (!lastInvoicedAt) return 'Never'
+  return new Date(lastInvoicedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function ServiceClientRow({
+  serviceClient,
+  onToggle,
+  onUpdatePaymentMethod,
+  onUpdateInvoiceFrequency,
+  onUpdateNextInvoiceNumber,
+}: {
+  serviceClient: ServiceClient
+  onToggle: (serviceClient: ServiceClient) => void
+  onUpdatePaymentMethod: (serviceClient: ServiceClient, paymentMethod: PaymentMethodType | null) => void
+  onUpdateInvoiceFrequency: (serviceClient: ServiceClient, invoiceFrequency: InvoiceFrequency | null) => void
+  onUpdateNextInvoiceNumber: (serviceClient: ServiceClient, value: number) => void
+}) {
+  const [invoiceNumberDraft, setInvoiceNumberDraft] = useState(String(serviceClient.next_invoice_number))
+  const [syncedInvoiceNumber, setSyncedInvoiceNumber] = useState(serviceClient.next_invoice_number)
+
+  if (serviceClient.next_invoice_number !== syncedInvoiceNumber) {
+    setSyncedInvoiceNumber(serviceClient.next_invoice_number)
+    setInvoiceNumberDraft(String(serviceClient.next_invoice_number))
+  }
+
+  function saveInvoiceNumber() {
+    const value = Number(invoiceNumberDraft)
+    if (!Number.isFinite(value) || value < 1 || Math.trunc(value) !== value) {
+      setInvoiceNumberDraft(String(serviceClient.next_invoice_number))
+      return
+    }
+    if (value === serviceClient.next_invoice_number) return
+    onUpdateNextInvoiceNumber(serviceClient, value)
+  }
+
+  return (
+    <tr>
+      <td>{serviceClient.name}</td>
+      <td>
+        <select
+          value={serviceClient.payment_method ?? ''}
+          onChange={(event) => onUpdatePaymentMethod(serviceClient, (event.target.value || null) as PaymentMethodType | null)}
+        >
+          <option value="">Not set</option>
+          {paymentMethodOptions.map((method) => (
+            <option key={method} value={method}>
+              {paymentMethodLabel[method]}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <select
+          value={serviceClient.invoice_frequency ?? ''}
+          onChange={(event) =>
+            onUpdateInvoiceFrequency(serviceClient, (event.target.value || null) as InvoiceFrequency | null)
+          }
+        >
+          <option value="">Not set</option>
+          {invoiceFrequencyOptions.map((frequency) => (
+            <option key={frequency} value={frequency}>
+              {invoiceFrequencyLabel[frequency]}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          className="gross-input"
+          value={invoiceNumberDraft}
+          onChange={(event) => setInvoiceNumberDraft(event.target.value)}
+          onBlur={saveInvoiceNumber}
+        />
+      </td>
+      <td>{formatLastInvoiced(serviceClient.last_invoiced_at)}</td>
+      <td>{serviceClient.active ? 'Active' : 'Inactive'}</td>
+      <td>
+        <div className="roster-actions">
+          <button type="button" className="btn-outline" onClick={() => onToggle(serviceClient)}>
+            {serviceClient.active ? 'Deactivate' : 'Activate'}
           </button>
         </div>
       </td>
@@ -253,6 +349,20 @@ export function TeamClientsSaleTypesTab({
   onUpdateClientNextInvoiceNumber,
   onUpdateClientOwnerPercents,
   onUpdateClientColor,
+  serviceClients,
+  newServiceClientName,
+  newServiceClientPaymentMethod,
+  newServiceClientInvoiceFrequency,
+  addingServiceClient,
+  serviceClientError,
+  onNewServiceClientNameChange,
+  onNewServiceClientPaymentMethodChange,
+  onNewServiceClientInvoiceFrequencyChange,
+  onAddServiceClient,
+  onToggleServiceClient,
+  onUpdateServiceClientPaymentMethod,
+  onUpdateServiceClientInvoiceFrequency,
+  onUpdateServiceClientNextInvoiceNumber,
   saleTypes,
   newSaleTypeLabel,
   addingSaleType,
@@ -300,6 +410,20 @@ export function TeamClientsSaleTypesTab({
     client: Client,
     input: { pmSalesOwnerPercent: number; sextingOwnerPercent: number; customsOwnerPercent: number },
   ) => void
+  serviceClients: ServiceClient[]
+  newServiceClientName: string
+  newServiceClientPaymentMethod: PaymentMethodType | null
+  newServiceClientInvoiceFrequency: InvoiceFrequency | null
+  addingServiceClient: boolean
+  serviceClientError: string | null
+  onNewServiceClientNameChange: (value: string) => void
+  onNewServiceClientPaymentMethodChange: (value: PaymentMethodType | null) => void
+  onNewServiceClientInvoiceFrequencyChange: (value: InvoiceFrequency | null) => void
+  onAddServiceClient: (event: FormEvent) => void
+  onToggleServiceClient: (serviceClient: ServiceClient) => void
+  onUpdateServiceClientPaymentMethod: (serviceClient: ServiceClient, paymentMethod: PaymentMethodType | null) => void
+  onUpdateServiceClientInvoiceFrequency: (serviceClient: ServiceClient, invoiceFrequency: InvoiceFrequency | null) => void
+  onUpdateServiceClientNextInvoiceNumber: (serviceClient: ServiceClient, value: number) => void
   saleTypes: SaleType[]
   newSaleTypeLabel: string
   addingSaleType: boolean
@@ -492,7 +616,9 @@ export function TeamClientsSaleTypesTab({
             </tbody>
           </table>
         </div>
+      </section>
 
+      <section className="panel">
         <div className="table-header">
           <h3>Management commission %</h3>
           <p>How much of each client's earnings the owner keeps, by transaction type.</p>
@@ -515,6 +641,95 @@ export function TeamClientsSaleTypesTab({
                 <tr>
                   <td colSpan={4} className="empty-row">
                     No clients yet — add your first one above.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Service clients</h2>
+            <p>Clients who only buy standalone services (GG Swaps, SFS, admin) - no color or commission split needed.</p>
+          </div>
+        </div>
+
+        <form className="add-worker-form" onSubmit={onAddServiceClient}>
+          <label>
+            Client name
+            <input
+              value={newServiceClientName}
+              onChange={(event) => onNewServiceClientNameChange(event.target.value)}
+              placeholder="Client name"
+            />
+          </label>
+          <label>
+            Payment method
+            <select
+              value={newServiceClientPaymentMethod ?? ''}
+              onChange={(event) => onNewServiceClientPaymentMethodChange((event.target.value || null) as PaymentMethodType | null)}
+            >
+              <option value="">Not set</option>
+              {paymentMethodOptions.map((method) => (
+                <option key={method} value={method}>
+                  {paymentMethodLabel[method]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Invoice frequency
+            <select
+              value={newServiceClientInvoiceFrequency ?? ''}
+              onChange={(event) =>
+                onNewServiceClientInvoiceFrequencyChange((event.target.value || null) as InvoiceFrequency | null)
+              }
+            >
+              <option value="">Not set</option>
+              {invoiceFrequencyOptions.map((frequency) => (
+                <option key={frequency} value={frequency}>
+                  {invoiceFrequencyLabel[frequency]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn-primary" disabled={addingServiceClient}>
+            {addingServiceClient ? 'Adding…' : 'Add service client'}
+          </button>
+        </form>
+        {serviceClientError && <p className="message message-error">{serviceClientError}</p>}
+
+        <div className="table-wrapper">
+          <table className="submission-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Payment method</th>
+                <th>Invoice frequency</th>
+                <th>Next invoice #</th>
+                <th>Last invoiced</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {serviceClients.map((serviceClient) => (
+                <ServiceClientRow
+                  key={serviceClient.id}
+                  serviceClient={serviceClient}
+                  onToggle={onToggleServiceClient}
+                  onUpdatePaymentMethod={onUpdateServiceClientPaymentMethod}
+                  onUpdateInvoiceFrequency={onUpdateServiceClientInvoiceFrequency}
+                  onUpdateNextInvoiceNumber={onUpdateServiceClientNextInvoiceNumber}
+                />
+              ))}
+              {serviceClients.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="empty-row">
+                    No service clients yet — add your first one above.
                   </td>
                 </tr>
               )}

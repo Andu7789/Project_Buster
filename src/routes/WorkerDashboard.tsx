@@ -8,7 +8,6 @@ import {
   listSaleEntriesForWorker,
   listSaleTypes,
   listSubmissionsForWorker,
-  notifyTelegram,
   submitTimesheet,
   upsertWorkerPaymentDetails,
 } from '../data/queries'
@@ -265,12 +264,6 @@ export function WorkerDashboard({ profile }: { profile: Profile }) {
       const nextSubmissions = submissions.map((entry) => (entry.id === invoiced.id ? invoiced : entry))
       setSubmissions(nextSubmissions)
       await downloadInvoicePdf(invoiced, clientTotals, nextSubmissions)
-      void notifyTelegram('worker_invoice_created', {
-        actorName: profile.full_name,
-        weekStart: invoiced.week_start,
-        weekEnd: invoiced.week_end,
-        amount: invoiced.amount,
-      })
     } catch (err) {
       setInvoiceError(err instanceof Error ? err.message : 'Could not create the invoice.')
     } finally {

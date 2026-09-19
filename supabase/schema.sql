@@ -377,15 +377,55 @@ create table if not exists buster_service_invoices (
   created_at timestamptz not null default now()
 );
 
+-- Migration: links a service invoice back to whichever client record it was billed to - at most
+-- one of these is set (whichever table the selected "bill to" name resolved from) - so the app
+-- knows whose next_invoice_number to advance. Nullable/no matching constraint since a "bill to"
+-- typed before this migration, or one that doesn't match either roster, still has to save.
+alter table buster_service_invoices add column if not exists client_id uuid references buster_clients(id);
+alter table buster_service_invoices add column if not exists service_client_id uuid references buster_service_clients(id);
+
 -- Singleton settings row holding the next invoice number to assign - owner-editable
 -- so they can set where the sequence starts (e.g. to continue numbering from invoices
 -- already sent outside the app), same idea as buster_clients.next_invoice_number.
+--
+-- Superseded by buster_clients.next_invoice_number / buster_service_clients.next_invoice_number
+-- (see migration above) - service invoices are now numbered per-client so a client's PM and
+-- GG Swaps/SFS invoices share one sequence. No longer read or written by the app; left in place
+-- rather than dropped since it's harmless.
 create table if not exists buster_service_invoice_settings (
   id boolean primary key default true check (id),
   next_invoice_number integer not null default 1,
   updated_at timestamptz not null default now()
 );
 insert into buster_service_invoice_settings (id) values (true) on conflict (id) do nothing;
+
+-- Roster of clients who only buy standalone services (GG Swaps/SFS/admin) and
+-- have no OnlyFans-management commission split, so they don't belong in
+-- buster_clients (no color, no owner-cut %s, no PM sale entries). Separate
+-- from buster_clients because a single real client can appear in both - e.g.
+-- a management client who also buys GG Swaps - and the Service Invoices
+-- "bill to" dropdown reads from both tables to cover that overlap. No
+-- "anyone signed in reads" policy, same reasoning as buster_payment_methods:
+-- this is only ever shown on the owner-only Team and Service Invoices tabs.
+create table if not exists buster_service_clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  payment_method text check (payment_method is null or payment_method in ('bank', 'wise', 'paypal')),
+  invoice_frequency text check (invoice_frequency is null or invoice_frequency in ('weekly', 'biweekly', 'monthly')),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- Migration: per-service-client invoice numbering (mirrors buster_clients.next_invoice_number)
+-- so a client's GG Swaps/SFS invoices share one running sequence with their PM invoice when
+-- they're also a buster_clients row - the app resolves the selected "bill to" name back to
+-- whichever table it came from and increments that record's own next_invoice_number.
+alter table buster_service_clients add column if not exists next_invoice_number integer not null default 1;
+
+-- Migration: last date this service client was actually invoiced - drives the "time to invoice
+-- them again" Telegram reminder (weekly/biweekly/monthly from invoice_frequency) and is set
+-- whenever a service invoice is generated for them.
+alter table buster_service_clients add column if not exists last_invoiced_at date;
 
 -- Migration: two new owner-submission categories, "Paige sexting" and "Alex
 -- sexting" - the owner's own sexting-type entries, as opposed to the
@@ -603,6 +643,7 @@ alter table buster_owner_submission_items enable row level security;
 alter table buster_owner_submissions enable row level security;
 alter table buster_owner_submission_invoices enable row level security;
 alter table buster_payment_methods enable row level security;
+alter table buster_service_clients enable row level security;
 alter table buster_worker_payment_details enable row level security;
 alter table buster_timetable_shifts enable row level security;
 alter table buster_service_invoices enable row level security;
@@ -814,6 +855,12 @@ create policy "owner manages" on buster_service_invoices for all
 
 drop policy if exists "owner manages" on buster_service_invoice_settings;
 create policy "owner manages" on buster_service_invoice_settings for all
+  using (buster_is_owner())
+  with check (buster_is_owner());
+
+-- buster_service_clients policies - owner-only, same shape as buster_payment_methods above.
+drop policy if exists "owner manages" on buster_service_clients;
+create policy "owner manages" on buster_service_clients for all
   using (buster_is_owner())
   with check (buster_is_owner());
 

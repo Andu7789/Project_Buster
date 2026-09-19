@@ -6,6 +6,7 @@ import {
   addOwner,
   addOwnerSubmission,
   addSaleType,
+  addServiceClient,
   addWorker,
   createClientInvoice,
   createInvoiceForSubmission,
@@ -29,15 +30,16 @@ import {
   listSaleEntriesForWeek,
   listSaleEntriesForWorker,
   listSaleTypes,
+  listServiceClients,
   listWorkers,
   markClientInvoiceDealtWith,
   markDealtWith,
   markOwnerSubmissionInvoiceDealtWith,
   markSubmissionPaid,
-  notifyTelegram,
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
+  setServiceClientActive,
   updateClientColor,
   updateClientNextInvoiceNumber,
   updateClientOwnerPercents,
@@ -45,6 +47,9 @@ import {
   updateClientTelegramChatId,
   updateOwnerSubmission,
   updatePaymentMethodDetails,
+  updateServiceClientInvoiceFrequency,
+  updateServiceClientNextInvoiceNumber,
+  updateServiceClientPaymentMethod,
   updateWorkerShare,
 } from '../data/queries'
 import { formatCurrency, getCurrentWeekRange, getNextWeekRange, getPreviousWeekRange, toISODate } from '../lib/dates'
@@ -64,6 +69,7 @@ import { paymentMethodFields, paymentMethodLabel } from '../lib/paymentMethods'
 import type {
   Client,
   ClientInvoice,
+  InvoiceFrequency,
   OwnerSubmission,
   OwnerSubmissionCategory,
   OwnerSubmissionInvoice,
@@ -75,6 +81,7 @@ import type {
   SaleEntry,
   SaleSection,
   SaleType,
+  ServiceClient,
   Submission,
   TrainingProgress,
   WorkerPaymentDetails,
@@ -107,6 +114,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [learners, setLearners] = useState<Profile[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [serviceClients, setServiceClients] = useState<ServiceClient[]>([])
   const [saleTypes, setSaleTypes] = useState<SaleType[]>([])
   const [clientInvoices, setClientInvoices] = useState<ClientInvoice[]>([])
   const [ownerSubmissions, setOwnerSubmissions] = useState<OwnerSubmission[]>([])
@@ -152,6 +160,12 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const [newClientColor, setNewClientColor] = useState(DEFAULT_CLIENT_COLOR)
   const [addingClient, setAddingClient] = useState(false)
   const [clientError, setClientError] = useState<string | null>(null)
+
+  const [newServiceClientName, setNewServiceClientName] = useState('')
+  const [newServiceClientPaymentMethod, setNewServiceClientPaymentMethod] = useState<PaymentMethodType | null>(null)
+  const [newServiceClientInvoiceFrequency, setNewServiceClientInvoiceFrequency] = useState<InvoiceFrequency | null>(null)
+  const [addingServiceClient, setAddingServiceClient] = useState(false)
+  const [serviceClientError, setServiceClientError] = useState<string | null>(null)
 
   const [newSaleTypeLabel, setNewSaleTypeLabel] = useState('')
   const [addingSaleType, setAddingSaleType] = useState(false)
@@ -201,6 +215,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       listWorkers(),
       listAllSubmissions(),
       listClients(),
+      listServiceClients(),
       listSaleTypes(),
       listClientInvoices(),
       listLearners(),
@@ -215,6 +230,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           workerData,
           submissionData,
           clientData,
+          serviceClientData,
           saleTypeData,
           clientInvoiceData,
           learnerData,
@@ -229,6 +245,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           setSubmissions(submissionData)
           setClients(clientData)
           setNewClientColor(nextClientColor(clientData.map((client) => client.color)))
+          setServiceClients(serviceClientData)
           setSaleTypes(saleTypeData)
           setClientInvoices(clientInvoiceData)
           setLearners(learnerData)
@@ -594,6 +611,71 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     }
   }
 
+  async function handleAddServiceClient(event: FormEvent) {
+    event.preventDefault()
+    setServiceClientError(null)
+    const name = newServiceClientName.trim()
+    if (!name) {
+      setServiceClientError('Enter a client name.')
+      return
+    }
+    setAddingServiceClient(true)
+    try {
+      const created = await addServiceClient(name, {
+        paymentMethod: newServiceClientPaymentMethod,
+        invoiceFrequency: newServiceClientInvoiceFrequency,
+      })
+      setServiceClients((previous) => [...previous, created])
+      setNewServiceClientName('')
+      setNewServiceClientPaymentMethod(null)
+      setNewServiceClientInvoiceFrequency(null)
+    } catch (err) {
+      setServiceClientError(err instanceof Error ? err.message : 'Could not add this client.')
+    } finally {
+      setAddingServiceClient(false)
+    }
+  }
+
+  async function handleToggleServiceClient(serviceClientToToggle: ServiceClient) {
+    const active = !serviceClientToToggle.active
+    try {
+      await setServiceClientActive(serviceClientToToggle.id, active)
+      setServiceClients((previous) => previous.map((c) => (c.id === serviceClientToToggle.id ? { ...c, active } : c)))
+    } catch (err) {
+      setServiceClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
+  async function handleUpdateServiceClientPaymentMethod(serviceClientToUpdate: ServiceClient, paymentMethod: PaymentMethodType | null) {
+    try {
+      const updated = await updateServiceClientPaymentMethod(serviceClientToUpdate.id, paymentMethod)
+      setServiceClients((previous) => previous.map((c) => (c.id === serviceClientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setServiceClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
+  async function handleUpdateServiceClientInvoiceFrequency(
+    serviceClientToUpdate: ServiceClient,
+    invoiceFrequency: InvoiceFrequency | null,
+  ) {
+    try {
+      const updated = await updateServiceClientInvoiceFrequency(serviceClientToUpdate.id, invoiceFrequency)
+      setServiceClients((previous) => previous.map((c) => (c.id === serviceClientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setServiceClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
+  async function handleUpdateServiceClientNextInvoiceNumber(serviceClientToUpdate: ServiceClient, value: number) {
+    try {
+      const updated = await updateServiceClientNextInvoiceNumber(serviceClientToUpdate.id, value)
+      setServiceClients((previous) => previous.map((c) => (c.id === serviceClientToUpdate.id ? updated : c)))
+    } catch (err) {
+      setServiceClientError(err instanceof Error ? err.message : 'Could not update this client.')
+    }
+  }
+
   async function handleAddSaleType(event: FormEvent) {
     event.preventDefault()
     setSaleTypeError(null)
@@ -851,12 +933,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     const invoiced = await createInvoiceForSubmission(submission.id)
     setSubmissions((previous) => previous.map((entry) => (entry.id === invoiced.id ? invoiced : entry)))
     await handleDownloadWorkerInvoicePdf(invoiced)
-    void notifyTelegram('worker_invoice_created', {
-      actorName: workers.find((worker) => worker.id === invoiced.worker_id)?.full_name ?? 'Unknown worker',
-      weekStart: invoiced.week_start,
-      weekEnd: invoiced.week_end,
-      amount: invoiced.amount,
-    })
   }
 
   async function handleDeleteSubmission(submissionId: string) {
@@ -1034,7 +1110,6 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
       : []
 
     await generateOwnerInvoicePdf({
-      clientName: client.real_name?.trim() || client.name,
       weekStart: ownerSubmissionsWeekStart,
       weekEnd: ownerSubmissionsWeekEnd,
       ownerSubmissionsCut,
@@ -1135,6 +1210,20 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onUpdateClientNextInvoiceNumber={handleUpdateClientNextInvoiceNumber}
               onUpdateClientOwnerPercents={handleUpdateClientOwnerPercents}
               onUpdateClientColor={handleUpdateClientColor}
+              serviceClients={serviceClients}
+              newServiceClientName={newServiceClientName}
+              newServiceClientPaymentMethod={newServiceClientPaymentMethod}
+              newServiceClientInvoiceFrequency={newServiceClientInvoiceFrequency}
+              addingServiceClient={addingServiceClient}
+              serviceClientError={serviceClientError}
+              onNewServiceClientNameChange={setNewServiceClientName}
+              onNewServiceClientPaymentMethodChange={setNewServiceClientPaymentMethod}
+              onNewServiceClientInvoiceFrequencyChange={setNewServiceClientInvoiceFrequency}
+              onAddServiceClient={handleAddServiceClient}
+              onToggleServiceClient={handleToggleServiceClient}
+              onUpdateServiceClientPaymentMethod={handleUpdateServiceClientPaymentMethod}
+              onUpdateServiceClientInvoiceFrequency={handleUpdateServiceClientInvoiceFrequency}
+              onUpdateServiceClientNextInvoiceNumber={handleUpdateServiceClientNextInvoiceNumber}
               saleTypes={saleTypes}
               newSaleTypeLabel={newSaleTypeLabel}
               addingSaleType={addingSaleType}

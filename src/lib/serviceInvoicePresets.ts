@@ -10,9 +10,9 @@ export interface ServiceInvoicePreset {
 }
 
 export const GG_SWAPS_PRESETS: ServiceInvoicePreset[] = [
-  { description: '1 Swap running at a time (weekly)', amountGbp: 50 },
-  { description: '2 Swaps running at a time (weekly)', amountGbp: 75 },
-  { description: '3 Swaps running at a time (weekly)', amountGbp: 95 },
+  { description: 'GG Assistance – One Swap', amountGbp: 50 },
+  { description: 'GG Assistance – Two Swaps', amountGbp: 75 },
+  { description: 'GG Assistance – Three Swaps', amountGbp: 95 },
 ]
 
 export const SFS_PRESETS: ServiceInvoicePreset[] = [
@@ -24,7 +24,8 @@ export const SFS_PRESETS: ServiceInvoicePreset[] = [
 /** Priced individually per invoice - picking one of these clears the amount for manual entry. */
 export const CUSTOM_SERVICE_DESCRIPTIONS: string[] = ['Scheduling assistance', 'Admin assistance']
 
-export const CUSTOM_SERVICE_OPTION = 'custom'
+/** Selecting this reveals free-text description + amount inputs instead of a preset. */
+export const CUSTOM_SERVICE_OPTION = 'Other'
 
 export function presetForDescription(description: string): ServiceInvoicePreset | undefined {
   return [...GG_SWAPS_PRESETS, ...SFS_PRESETS].find((preset) => preset.description === description)

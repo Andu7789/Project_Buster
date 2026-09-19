@@ -1024,8 +1024,12 @@ a:focus-visible {
   padding: 6px 8px;
 }
 
-.timetable-week-boundary {
-  border-left: 2px solid var(--border);
+.timetable-week-label {
+  margin-top: 2px;
+}
+
+.timetable-week2-row td {
+  border-bottom: 2px solid var(--border);
 }
 
 .owner-submission-add-row {

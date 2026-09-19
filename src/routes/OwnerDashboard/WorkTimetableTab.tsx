@@ -94,31 +94,41 @@ function TimetableRow({
   }
 
   return (
-    <tr>
-      <td>{workerName}</td>
-      {week1.dates.map((date) => (
-        <td key={date}>
-          <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
+    <>
+      <tr>
+        <td>
+          <div>{workerName}</div>
+          <div className="info-text timetable-week-label">{formatWeekRange(week1.weekStart, week1.weekEnd)}</div>
         </td>
-      ))}
-      {week2.dates.map((date, index) => (
-        <td key={date} className={index === 0 ? 'timetable-week-boundary' : undefined}>
-          <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
+        {week1.dates.map((date) => (
+          <td key={date}>
+            <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
+          </td>
+        ))}
+        <td rowSpan={2}>
+          <div className="roster-actions">
+            <button type="button" className="btn-outline" onClick={handleSave} disabled={saving || !dirty}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="btn-danger" onClick={() => onRemove(row.id)}>
+              Remove
+            </button>
+          </div>
+          {error && <p className="message message-error">{error}</p>}
+          {saved && !error && <p className="message message-info">Saved.</p>}
         </td>
-      ))}
-      <td>
-        <div className="roster-actions">
-          <button type="button" className="btn-outline" onClick={handleSave} disabled={saving || !dirty}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button type="button" className="btn-danger" onClick={() => onRemove(row.id)}>
-            Remove
-          </button>
-        </div>
-        {error && <p className="message message-error">{error}</p>}
-        {saved && !error && <p className="message message-info">Saved.</p>}
-      </td>
-    </tr>
+      </tr>
+      <tr className="timetable-week2-row">
+        <td>
+          <div className="info-text timetable-week-label">{formatWeekRange(week2.weekStart, week2.weekEnd)}</div>
+        </td>
+        {week2.dates.map((date) => (
+          <td key={date}>
+            <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
+          </td>
+        ))}
+      </tr>
+    </>
   )
 }
 
@@ -194,22 +204,11 @@ function ClientTimetableSection({
         <table className="detail-table">
           <thead>
             <tr>
-              <th rowSpan={2}>Contractor</th>
-              <th colSpan={daysOfWeek.length}>{formatWeekRange(week1.weekStart, week1.weekEnd)}</th>
-              <th colSpan={daysOfWeek.length} className="timetable-week-boundary">
-                {formatWeekRange(week2.weekStart, week2.weekEnd)}
-              </th>
-              <th rowSpan={2}></th>
-            </tr>
-            <tr>
+              <th>Contractor</th>
               {daysOfWeek.map((day) => (
-                <th key={`w1-${day}`}>{day}</th>
+                <th key={day}>{day}</th>
               ))}
-              {daysOfWeek.map((day, index) => (
-                <th key={`w2-${day}`} className={index === 0 ? 'timetable-week-boundary' : undefined}>
-                  {day}
-                </th>
-              ))}
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -226,7 +225,7 @@ function ClientTimetableSection({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={daysOfWeek.length * 2 + 2} className="empty-row">
+                <td colSpan={daysOfWeek.length + 2} className="empty-row">
                   No contractors added yet for this client.
                 </td>
               </tr>

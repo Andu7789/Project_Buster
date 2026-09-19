@@ -1,8 +1,45 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { listTimetableShiftsForWorker } from '../../data/queries'
-import { daysOfWeek, formatWeekRange, getTimetableWeeks } from '../../lib/dates'
+import { daysOfWeek, formatWeekRange, getTimetableWeeks, type TimetableWeek } from '../../lib/dates'
 import { formatShiftLabel, shiftForDate } from '../../lib/timetable'
 import type { Client, TimetableShift } from '../../types'
+
+function WeekBlock({ week, rows, clients }: { week: TimetableWeek; rows: TimetableShift[]; clients: Client[] }) {
+  return (
+    <div className="timetable-week-block">
+      <h3 className="detail-summary-heading">{formatWeekRange(week.weekStart, week.weekEnd)}</h3>
+      <div className="table-wrapper">
+        <table className="detail-table">
+          <thead>
+            <tr>
+              <th>Client</th>
+              {daysOfWeek.map((day) => (
+                <th key={day}>{day}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>{clients.find((client) => client.id === row.client_id)?.name ?? 'Unknown client'}</td>
+                {week.dates.map((date) => (
+                  <td key={date}>{formatShiftLabel(shiftForDate(row.shifts, date))}</td>
+                ))}
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={daysOfWeek.length + 1} className="empty-row">
+                  No timetable set yet - ask the owner to add your hours.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 export function WorkTimetableTab({ workerId, clients }: { workerId: string; clients: Client[] }) {
   const [rows, setRows] = useState<TimetableShift[]>([])
@@ -41,48 +78,10 @@ export function WorkTimetableTab({ workerId, clients }: { workerId: string; clie
       ) : error ? (
         <p className="message message-error">{error}</p>
       ) : (
-        <div className="table-wrapper">
-          <table className="detail-table">
-            <thead>
-              <tr>
-                <th>Client</th>
-                {daysOfWeek.map((day) => (
-                  <th key={day}>{day}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <Fragment key={row.id}>
-                  <tr>
-                    <td>
-                      <div>{clients.find((client) => client.id === row.client_id)?.name ?? 'Unknown client'}</div>
-                      <div className="info-text timetable-week-label">{formatWeekRange(week1.weekStart, week1.weekEnd)}</div>
-                    </td>
-                    {week1.dates.map((date) => (
-                      <td key={date}>{formatShiftLabel(shiftForDate(row.shifts, date))}</td>
-                    ))}
-                  </tr>
-                  <tr className="timetable-week2-row">
-                    <td>
-                      <div className="info-text timetable-week-label">{formatWeekRange(week2.weekStart, week2.weekEnd)}</div>
-                    </td>
-                    {week2.dates.map((date) => (
-                      <td key={date}>{formatShiftLabel(shiftForDate(row.shifts, date))}</td>
-                    ))}
-                  </tr>
-                </Fragment>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={daysOfWeek.length + 1} className="empty-row">
-                    No timetable set yet - ask the owner to add your hours.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <WeekBlock week={week1} rows={rows} clients={clients} />
+          <WeekBlock week={week2} rows={rows} clients={clients} />
+        </>
       )}
     </section>
   )

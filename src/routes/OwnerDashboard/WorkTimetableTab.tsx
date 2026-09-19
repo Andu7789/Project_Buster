@@ -36,33 +36,47 @@ function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (
   )
 }
 
-/** Seeds one draft entry per date across both weeks, keyed by the actual ISO date rather than
- * day name, so week 1 and week 2 can hold different shifts even on the same weekday. */
-function buildDraft(shifts: TimetableShift['shifts'], week1: TimetableWeek, week2: TimetableWeek): Record<string, DayShift> {
+/** Seeds one draft entry per date for just this one week, keyed by the actual ISO date rather
+ * than day name, so week 1 and week 2 can hold different shifts even on the same weekday. */
+function buildWeekDraft(shifts: TimetableShift['shifts'], week: TimetableWeek): Record<string, DayShift> {
   const draft: Record<string, DayShift> = {}
-  for (const date of [...week1.dates, ...week2.dates]) {
+  for (const date of week.dates) {
     const value = shiftForDate(shifts, date)
     if (value) draft[date] = value
   }
   return draft
 }
 
-function TimetableRow({
+/** Folds one week's edited dates back into the row's full shifts record, leaving the other
+ * week's dates (and any legacy day-name entries) untouched - each week block saves
+ * independently, so this must never wholesale-replace the other week's already-saved data. */
+function mergeWeekIntoShifts(
+  shifts: TimetableShift['shifts'],
+  week: TimetableWeek,
+  weekDraft: Record<string, DayShift>,
+): Record<string, DayShift> {
+  const merged = { ...shifts }
+  for (const date of week.dates) {
+    if (weekDraft[date]) merged[date] = weekDraft[date]
+    else delete merged[date]
+  }
+  return merged
+}
+
+function WeekRow({
   row,
+  week,
   workerName,
-  week1,
-  week2,
   onSave,
   onRemove,
 }: {
   row: TimetableShift
+  week: TimetableWeek
   workerName: string
-  week1: TimetableWeek
-  week2: TimetableWeek
   onSave: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
   onRemove: (rowId: string) => void
 }) {
-  const [draft, setDraft] = useState<Record<string, DayShift>>(() => buildDraft(row.shifts, week1, week2))
+  const [draft, setDraft] = useState<Record<string, DayShift>>(() => buildWeekDraft(row.shifts, week))
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -83,7 +97,7 @@ function TimetableRow({
     setSaving(true)
     setError(null)
     try {
-      await onSave(row.id, draft)
+      await onSave(row.id, mergeWeekIntoShifts(row.shifts, week, draft))
       setDirty(false)
       setSaved(true)
     } catch (err) {
@@ -94,41 +108,78 @@ function TimetableRow({
   }
 
   return (
-    <>
-      <tr>
-        <td>
-          <div>{workerName}</div>
-          <div className="info-text timetable-week-label">{formatWeekRange(week1.weekStart, week1.weekEnd)}</div>
+    <tr>
+      <td>{workerName}</td>
+      {week.dates.map((date) => (
+        <td key={date}>
+          <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
         </td>
-        {week1.dates.map((date) => (
-          <td key={date}>
-            <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
-          </td>
-        ))}
-        <td rowSpan={2}>
-          <div className="roster-actions">
-            <button type="button" className="btn-outline" onClick={handleSave} disabled={saving || !dirty}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className="btn-danger" onClick={() => onRemove(row.id)}>
-              Remove
-            </button>
-          </div>
-          {error && <p className="message message-error">{error}</p>}
-          {saved && !error && <p className="message message-info">Saved.</p>}
-        </td>
-      </tr>
-      <tr className="timetable-week2-row">
-        <td>
-          <div className="info-text timetable-week-label">{formatWeekRange(week2.weekStart, week2.weekEnd)}</div>
-        </td>
-        {week2.dates.map((date) => (
-          <td key={date}>
-            <DayCell value={draft[date]} onChange={(value) => setDay(date, value)} />
-          </td>
-        ))}
-      </tr>
-    </>
+      ))}
+      <td>
+        <div className="roster-actions">
+          <button type="button" className="btn-outline" onClick={handleSave} disabled={saving || !dirty}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" className="btn-danger" onClick={() => onRemove(row.id)}>
+            Remove
+          </button>
+        </div>
+        {error && <p className="message message-error">{error}</p>}
+        {saved && !error && <p className="message message-info">Saved.</p>}
+      </td>
+    </tr>
+  )
+}
+
+function WeekBlock({
+  week,
+  rows,
+  workers,
+  onSaveRow,
+  onRemoveRow,
+}: {
+  week: TimetableWeek
+  rows: TimetableShift[]
+  workers: Profile[]
+  onSaveRow: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
+  onRemoveRow: (rowId: string) => void
+}) {
+  return (
+    <div className="timetable-week-block">
+      <h3 className="detail-summary-heading">{formatWeekRange(week.weekStart, week.weekEnd)}</h3>
+      <div className="table-wrapper">
+        <table className="detail-table">
+          <thead>
+            <tr>
+              <th>Contractor</th>
+              {daysOfWeek.map((day) => (
+                <th key={day}>{day}</th>
+              ))}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <WeekRow
+                key={row.id}
+                row={row}
+                week={week}
+                workerName={workers.find((worker) => worker.id === row.worker_id)?.full_name ?? 'Unknown'}
+                onSave={onSaveRow}
+                onRemove={onRemoveRow}
+              />
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={daysOfWeek.length + 2} className="empty-row">
+                  No contractors added yet for this client.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
@@ -200,39 +251,8 @@ function ClientTimetableSection({
       </form>
       {addError && <p className="message message-error">{addError}</p>}
 
-      <div className="table-wrapper">
-        <table className="detail-table">
-          <thead>
-            <tr>
-              <th>Contractor</th>
-              {daysOfWeek.map((day) => (
-                <th key={day}>{day}</th>
-              ))}
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <TimetableRow
-                key={row.id}
-                row={row}
-                workerName={workers.find((worker) => worker.id === row.worker_id)?.full_name ?? 'Unknown'}
-                week1={week1}
-                week2={week2}
-                onSave={onSaveRow}
-                onRemove={onRemoveRow}
-              />
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={daysOfWeek.length + 2} className="empty-row">
-                  No contractors added yet for this client.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <WeekBlock week={week1} rows={rows} workers={workers} onSaveRow={onSaveRow} onRemoveRow={onRemoveRow} />
+      <WeekBlock week={week2} rows={rows} workers={workers} onSaveRow={onSaveRow} onRemoveRow={onRemoveRow} />
     </section>
   )
 }

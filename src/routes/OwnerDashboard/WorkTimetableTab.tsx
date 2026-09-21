@@ -5,14 +5,25 @@ import { clientColorVars } from '../../lib/clientColor'
 import { formatShiftLabel, shiftForDate, SHIFT_PRESETS, shiftPresetKey } from '../../lib/timetable'
 import type { Client, DayShift, Profile, TimetableShift } from '../../types'
 
-/** No shift selected (rather than a separate Off toggle) means the day is off. Falls back to
- * showing a row's existing value as its own option if it predates the fixed preset blocks, so
- * saving the row again doesn't silently rewrite it to one of the four presets. */
+const CUSTOM_OPTION = 'custom'
+const DEFAULT_CUSTOM_SHIFT: DayShift = { start: '09:00', end: '17:00' }
+
+/** No shift selected (rather than a separate Off toggle) means the day is off. A value that
+ * doesn't match one of the fixed presets - either a legacy entry from before the preset blocks
+ * existed, or one entered via "Custom…" below - opens straight into the custom time inputs
+ * instead of silently falling back to a preset, so it's never rewritten by re-saving the row. */
 function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (value: DayShift | undefined) => void }) {
   const currentKey = value ? shiftPresetKey(value) : ''
   const isKnownPreset = SHIFT_PRESETS.some((preset) => shiftPresetKey(preset) === currentKey)
+  const [showCustom, setShowCustom] = useState(Boolean(value) && !isKnownPreset)
 
-  function handleChange(key: string) {
+  function handleSelectChange(key: string) {
+    if (key === CUSTOM_OPTION) {
+      setShowCustom(true)
+      if (!value) onChange(DEFAULT_CUSTOM_SHIFT)
+      return
+    }
+    setShowCustom(false)
     if (!key) {
       onChange(undefined)
       return
@@ -21,17 +32,38 @@ function DayCell({ value, onChange }: { value: DayShift | undefined; onChange: (
     if (preset) onChange(preset)
   }
 
+  function handleCustomTimeChange(field: 'start' | 'end', time: string) {
+    onChange({ start: value?.start ?? DEFAULT_CUSTOM_SHIFT.start, end: value?.end ?? DEFAULT_CUSTOM_SHIFT.end, [field]: time })
+  }
+
   return (
     <div className="timetable-day-cell">
-      <select value={currentKey} onChange={(event) => handleChange(event.target.value)}>
+      <select value={showCustom ? CUSTOM_OPTION : currentKey} onChange={(event) => handleSelectChange(event.target.value)}>
         <option value="">Off</option>
         {SHIFT_PRESETS.map((preset) => (
           <option key={shiftPresetKey(preset)} value={shiftPresetKey(preset)}>
             {formatShiftLabel(preset)}
           </option>
         ))}
-        {value && !isKnownPreset && <option value={currentKey}>{formatShiftLabel(value)}</option>}
+        <option value={CUSTOM_OPTION}>Custom…</option>
       </select>
+      {showCustom && (
+        <div className="timetable-custom-times">
+          <input
+            type="time"
+            aria-label="Custom start time"
+            value={value?.start ?? DEFAULT_CUSTOM_SHIFT.start}
+            onChange={(event) => handleCustomTimeChange('start', event.target.value)}
+          />
+          <span>–</span>
+          <input
+            type="time"
+            aria-label="Custom end time"
+            value={value?.end ?? DEFAULT_CUSTOM_SHIFT.end}
+            onChange={(event) => handleCustomTimeChange('end', event.target.value)}
+          />
+        </div>
+      )}
     </div>
   )
 }

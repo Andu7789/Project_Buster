@@ -1024,6 +1024,18 @@ a:focus-visible {
   padding: 6px 8px;
 }
 
+.timetable-custom-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timetable-custom-times input[type='time'] {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 8px;
+}
+
 .owner-submission-add-row {
   display: grid;
   grid-template-columns: 140px minmax(85px, 140px) 113px 100px 113px minmax(140px, auto) auto;

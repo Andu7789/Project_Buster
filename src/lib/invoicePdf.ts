@@ -487,6 +487,8 @@ export async function generateServiceInvoicePdf(input: {
   billToName: string
   lineItems: ServiceInvoiceLineItem[]
   totalGbp: number
+  paymentMethodLabel: string | null
+  paymentMethodLines: string[]
 }): Promise<void> {
   const [logoDataUrl, thankYouDataUrl] = await Promise.all([toDataUrl(logoUrl), toDataUrl(thankYouUrl)])
   const doc = new jsPDF()
@@ -506,8 +508,37 @@ export async function generateServiceInvoicePdf(input: {
   drawField(doc, 'Bill to:', input.billToName, 14, 64, 85)
   drawField(doc, 'Date Due:', formatDate(input.dateDueIso), 110, 64, 86)
 
+  doc.setFontSize(9)
+  doc.setTextColor(...INK_MUTED)
+  doc.text('Payment Method:', 14, 82)
+
+  let pmY = 89
+  if (input.paymentMethodLabel) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(...INK)
+    doc.text(input.paymentMethodLabel, 14, pmY)
+    pmY += 6
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...INK_MUTED)
+    for (const line of input.paymentMethodLines) {
+      doc.text(line, 14, pmY)
+      pmY += 5
+    }
+  } else {
+    doc.setFontSize(10)
+    doc.setTextColor(...INK_MUTED)
+    doc.text('Not set', 14, pmY)
+    pmY += 6
+  }
+
+  doc.setDrawColor(...PINK)
+  doc.setLineWidth(0.4)
+  doc.line(14, pmY + 2, 196, pmY + 2)
+
   autoTable(doc, {
-    startY: 82,
+    startY: pmY + 10,
     head: [['Service Description', 'Total (GBP)']],
     body: input.lineItems.map((item) => [item.description, formatGbpAmount(item.amountGbp)]),
     foot: [['Total', formatGbpAmount(input.totalGbp)]],

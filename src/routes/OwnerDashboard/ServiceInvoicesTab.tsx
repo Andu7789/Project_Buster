@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   createServiceInvoice,
   listClients,
+  listPaymentMethods,
   listServiceClients,
   listServiceInvoices,
   markServiceClientInvoiced,
@@ -9,6 +10,7 @@ import {
 } from '../../data/queries'
 import { toISODate } from '../../lib/dates'
 import { generateServiceInvoicePdf } from '../../lib/invoicePdf'
+import { paymentMethodFields, paymentMethodLabel } from '../../lib/paymentMethods'
 import {
   CUSTOM_SERVICE_DESCRIPTIONS,
   CUSTOM_SERVICE_OPTION,
@@ -16,7 +18,7 @@ import {
   presetForDescription,
   SFS_PRESETS,
 } from '../../lib/serviceInvoicePresets'
-import type { Client, ServiceClient, ServiceInvoice, ServiceInvoiceLineItem } from '../../types'
+import type { Client, PaymentMethod, PaymentMethodType, ServiceClient, ServiceInvoice, ServiceInvoiceLineItem } from '../../types'
 
 function formatGbp(amountGbp: number): string {
   return `£${amountGbp.toFixed(2)}`
@@ -35,17 +37,19 @@ export function ServiceInvoicesTab() {
   const [invoices, setInvoices] = useState<ServiceInvoice[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [serviceClients, setServiceClients] = useState<ServiceClient[]>([])
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([listServiceInvoices(), listClients(), listServiceClients()])
-      .then(([invoiceData, clientData, serviceClientData]) => {
+    Promise.all([listServiceInvoices(), listClients(), listServiceClients(), listPaymentMethods()])
+      .then(([invoiceData, clientData, serviceClientData, paymentMethodData]) => {
         if (cancelled) return
         setInvoices(invoiceData)
         setClients(clientData)
         setServiceClients(serviceClientData)
+        setPaymentMethods(paymentMethodData)
         setLoadError(null)
       })
       .catch((err) => {
@@ -72,6 +76,25 @@ export function ServiceInvoicesTab() {
     if (client) return { kind: 'client', record: client }
     const serviceClient = serviceClients.find((entry) => entry.name === name)
     if (serviceClient) return { kind: 'serviceClient', record: serviceClient }
+    return null
+  }
+
+  /** The owner's saved payout details for the method this bill-to is set to pay by - the same
+   *  lookup owner invoices use, rendered as "Payment Method" on the service invoice PDF. */
+  function paymentDetailsFor(method: PaymentMethodType | null): { label: string | null; lines: string[] } {
+    if (!method) return { label: null, lines: [] }
+    const methodDetails = paymentMethods.find((entry) => entry.method === method)?.details
+    const lines = paymentMethodFields[method]
+      .map((field) => ({ label: field.label, value: methodDetails?.[field.key]?.trim() ?? '' }))
+      .filter((field) => field.value !== '')
+      .map((field) => `${field.label}: ${field.value}`)
+    return { label: paymentMethodLabel[method], lines }
+  }
+
+  /** Resolves a saved invoice back to its bill-to record so its current payment method can be looked up. */
+  function billToRecordForInvoice(invoice: ServiceInvoice): Client | ServiceClient | null {
+    if (invoice.client_id) return clients.find((entry) => entry.id === invoice.client_id) ?? null
+    if (invoice.service_client_id) return serviceClients.find((entry) => entry.id === invoice.service_client_id) ?? null
     return null
   }
 
@@ -159,6 +182,7 @@ export function ServiceInvoicesTab() {
         lineItems,
         totalGbp,
       })
+      const payment = paymentDetailsFor(target.record.payment_method)
       await generateServiceInvoicePdf({
         invoiceNumber: invoice.invoice_number,
         dateIssuedIso: invoice.date_issued,
@@ -166,6 +190,8 @@ export function ServiceInvoicesTab() {
         billToName: invoice.bill_to,
         lineItems: invoice.line_items,
         totalGbp: invoice.total_gbp,
+        paymentMethodLabel: payment.label,
+        paymentMethodLines: payment.lines,
       })
 
       if (target.kind === 'client') {
@@ -356,7 +382,9 @@ export function ServiceInvoicesTab() {
                       <button
                         type="button"
                         className="btn-outline"
-                        onClick={() =>
+                        onClick={() => {
+                          const record = billToRecordForInvoice(invoice)
+                          const payment = paymentDetailsFor(record?.payment_method ?? null)
                           generateServiceInvoicePdf({
                             invoiceNumber: invoice.invoice_number,
                             dateIssuedIso: invoice.date_issued,
@@ -364,8 +392,10 @@ export function ServiceInvoicesTab() {
                             billToName: invoice.bill_to,
                             lineItems: invoice.line_items,
                             totalGbp: invoice.total_gbp,
+                            paymentMethodLabel: payment.label,
+                            paymentMethodLines: payment.lines,
                           })
-                        }
+                        }}
                       >
                         Download PDF
                       </button>

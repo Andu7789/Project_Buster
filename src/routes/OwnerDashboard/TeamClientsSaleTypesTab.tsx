@@ -143,12 +143,14 @@ function formatLastInvoiced(lastInvoicedAt: string | null): string {
 function ServiceClientRow({
   serviceClient,
   onToggle,
+  onDelete,
   onUpdatePaymentMethod,
   onUpdateInvoiceFrequency,
   onUpdateNextInvoiceNumber,
 }: {
   serviceClient: ServiceClient
   onToggle: (serviceClient: ServiceClient) => void
+  onDelete: (serviceClient: ServiceClient) => void
   onUpdatePaymentMethod: (serviceClient: ServiceClient, paymentMethod: PaymentMethodType | null) => void
   onUpdateInvoiceFrequency: (serviceClient: ServiceClient, invoiceFrequency: InvoiceFrequency | null) => void
   onUpdateNextInvoiceNumber: (serviceClient: ServiceClient, value: number) => void
@@ -219,6 +221,9 @@ function ServiceClientRow({
         <div className="roster-actions">
           <button type="button" className="btn-outline" onClick={() => onToggle(serviceClient)}>
             {serviceClient.active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button type="button" className="btn-outline" onClick={() => onDelete(serviceClient)}>
+            Delete
           </button>
         </div>
       </td>
@@ -360,6 +365,7 @@ export function TeamClientsSaleTypesTab({
   onNewServiceClientInvoiceFrequencyChange,
   onAddServiceClient,
   onToggleServiceClient,
+  onDeleteServiceClient,
   onUpdateServiceClientPaymentMethod,
   onUpdateServiceClientInvoiceFrequency,
   onUpdateServiceClientNextInvoiceNumber,
@@ -421,6 +427,7 @@ export function TeamClientsSaleTypesTab({
   onNewServiceClientInvoiceFrequencyChange: (value: InvoiceFrequency | null) => void
   onAddServiceClient: (event: FormEvent) => void
   onToggleServiceClient: (serviceClient: ServiceClient) => void
+  onDeleteServiceClient: (serviceClient: ServiceClient) => void
   onUpdateServiceClientPaymentMethod: (serviceClient: ServiceClient, paymentMethod: PaymentMethodType | null) => void
   onUpdateServiceClientInvoiceFrequency: (serviceClient: ServiceClient, invoiceFrequency: InvoiceFrequency | null) => void
   onUpdateServiceClientNextInvoiceNumber: (serviceClient: ServiceClient, value: number) => void
@@ -721,6 +728,7 @@ export function TeamClientsSaleTypesTab({
                   key={serviceClient.id}
                   serviceClient={serviceClient}
                   onToggle={onToggleServiceClient}
+                  onDelete={onDeleteServiceClient}
                   onUpdatePaymentMethod={onUpdateServiceClientPaymentMethod}
                   onUpdateInvoiceFrequency={onUpdateServiceClientInvoiceFrequency}
                   onUpdateNextInvoiceNumber={onUpdateServiceClientNextInvoiceNumber}

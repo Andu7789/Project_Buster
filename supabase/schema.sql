@@ -64,7 +64,13 @@ with ranked as (
 update buster_submissions s
 set invoice_number = ranked.rn
 from ranked
-where s.id = ranked.id;
+where s.id = ranked.id
+  -- Only backfill workers with no numbers at all. A worker who already has some numbered rows
+  -- has uninvoiced (null) submissions on purpose, see buster_create_invoice_for_submission().
+  and not exists (
+    select 1 from buster_submissions x
+    where x.worker_id = s.worker_id and x.invoice_number is not null
+  );
 
 alter table buster_submissions drop constraint if exists buster_submissions_worker_invoice_number_key;
 alter table buster_submissions add constraint buster_submissions_worker_invoice_number_key unique (worker_id, invoice_number);
@@ -436,6 +442,12 @@ create table if not exists buster_service_clients (
 -- they're also a buster_clients row - the app resolves the selected "bill to" name back to
 -- whichever table it came from and increments that record's own next_invoice_number.
 alter table buster_service_clients add column if not exists next_invoice_number integer not null default 1;
+
+-- Migration: allow deleting a service client. Invoices keep their row but lose the link
+-- (service_client_id is nullable), instead of the foreign key blocking the delete.
+alter table buster_service_invoices drop constraint if exists buster_service_invoices_service_client_id_fkey;
+alter table buster_service_invoices add constraint buster_service_invoices_service_client_id_fkey
+  foreign key (service_client_id) references buster_service_clients(id) on delete set null;
 
 -- Migration: last date this service client was actually invoiced - drives the "time to invoice
 -- them again" Telegram reminder (weekly/biweekly/monthly from invoice_frequency) and is set

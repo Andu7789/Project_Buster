@@ -39,6 +39,7 @@ import {
   setClientActive,
   setProfileStatus,
   setSaleTypeActive,
+  deleteServiceClient,
   setServiceClientActive,
   updateClientColor,
   updateClientNextInvoiceNumber,
@@ -646,6 +647,20 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
     }
   }
 
+  async function handleDeleteServiceClient(serviceClientToDelete: ServiceClient) {
+    const confirmed = window.confirm(
+      `Delete ${serviceClientToDelete.name}? This can't be undone. Their past invoices are kept, but will no longer be linked to them.`,
+    )
+    if (!confirmed) return
+    setServiceClientError(null)
+    try {
+      await deleteServiceClient(serviceClientToDelete.id)
+      setServiceClients((previous) => previous.filter((c) => c.id !== serviceClientToDelete.id))
+    } catch (err) {
+      setServiceClientError(err instanceof Error ? err.message : 'Could not delete this client.')
+    }
+  }
+
   async function handleUpdateServiceClientPaymentMethod(serviceClientToUpdate: ServiceClient, paymentMethod: PaymentMethodType | null) {
     try {
       const updated = await updateServiceClientPaymentMethod(serviceClientToUpdate.id, paymentMethod)
@@ -1221,6 +1236,7 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               onNewServiceClientInvoiceFrequencyChange={setNewServiceClientInvoiceFrequency}
               onAddServiceClient={handleAddServiceClient}
               onToggleServiceClient={handleToggleServiceClient}
+              onDeleteServiceClient={handleDeleteServiceClient}
               onUpdateServiceClientPaymentMethod={handleUpdateServiceClientPaymentMethod}
               onUpdateServiceClientInvoiceFrequency={handleUpdateServiceClientInvoiceFrequency}
               onUpdateServiceClientNextInvoiceNumber={handleUpdateServiceClientNextInvoiceNumber}

@@ -493,6 +493,12 @@ export async function setServiceClientActive(serviceClientId: string, active: bo
   if (error) throw error
 }
 
+export async function deleteServiceClient(serviceClientId: string): Promise<void> {
+  const client = requireClient()
+  const { error } = await client.from('buster_service_clients').delete().eq('id', serviceClientId)
+  if (error) throw error
+}
+
 export async function updateServiceClientPaymentMethod(
   serviceClientId: string,
   paymentMethod: PaymentMethodType | null,

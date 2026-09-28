@@ -138,15 +138,17 @@ export interface DayShift {
 }
 
 /**
- * One contractor's weekly hours for one client - one row per (client, worker)
- * pair, days keyed by name (e.g. "Monday") in `shifts`. A day with no key is
- * "Off"; unlike Submission.day_amounts this is owner-set, not worker-set.
+ * One contractor's hours for one client - one row per (client, worker) pair.
+ * `shifts` holds the weekly default keyed by day name (e.g. "Monday") plus
+ * per-date overrides keyed by ISO date. A date set to null is explicitly
+ * "Off" that week even if the default has a shift; a day with no key at all
+ * is "Off" too. Unlike Submission.day_amounts this is owner-set, not worker-set.
  */
 export interface TimetableShift {
   id: string
   client_id: string
   worker_id: string
-  shifts: Record<string, DayShift>
+  shifts: Record<string, DayShift | null>
   created_at: string
   updated_at: string
 }

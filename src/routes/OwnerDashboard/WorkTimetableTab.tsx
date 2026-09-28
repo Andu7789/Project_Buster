@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { addTimetableShift, deleteTimetableShift, listAllTimetableShifts, updateTimetableShift } from '../../data/queries'
 import { daysOfWeek, formatWeekRange, getTimetableWeeks, type TimetableWeek } from '../../lib/dates'
 import { clientColorVars } from '../../lib/clientColor'
-import { formatShiftLabel, shiftForDate, SHIFT_PRESETS, shiftPresetKey } from '../../lib/timetable'
+import { formatShiftLabel, shiftForDate, SHIFT_PRESETS, shiftPresetKey, withWeekAsDefault } from '../../lib/timetable'
 import type { Client, DayShift, Profile, TimetableShift } from '../../types'
 
 const CUSTOM_OPTION = 'custom'
@@ -80,17 +80,17 @@ function buildWeekDraft(shifts: TimetableShift['shifts'], week: TimetableWeek): 
 }
 
 /** Folds one week's edited dates back into the row's full shifts record, leaving the other
- * week's dates (and any legacy day-name entries) untouched - each week block saves
- * independently, so this must never wholesale-replace the other week's already-saved data. */
+ * week's dates (and the weekly default day-name entries) untouched - each week block saves
+ * independently, so this must never wholesale-replace the other week's already-saved data.
+ * Off days are stored as null so they override the weekly default for that date. */
 function mergeWeekIntoShifts(
   shifts: TimetableShift['shifts'],
   week: TimetableWeek,
   weekDraft: Record<string, DayShift>,
-): Record<string, DayShift> {
+): TimetableShift['shifts'] {
   const merged = { ...shifts }
   for (const date of week.dates) {
-    if (weekDraft[date]) merged[date] = weekDraft[date]
-    else delete merged[date]
+    merged[date] = weekDraft[date] ?? null
   }
   return merged
 }
@@ -105,7 +105,7 @@ function WeekRow({
   row: TimetableShift
   week: TimetableWeek
   workerName: string
-  onSave: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
+  onSave: (rowId: string, shifts: TimetableShift['shifts']) => Promise<void>
   onRemove: (rowId: string) => void
 }) {
   const [draft, setDraft] = useState<Record<string, DayShift>>(() => buildWeekDraft(row.shifts, week))
@@ -173,12 +173,40 @@ function WeekBlock({
   week: TimetableWeek
   rows: TimetableShift[]
   workers: Profile[]
-  onSaveRow: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
+  onSaveRow: (rowId: string, shifts: TimetableShift['shifts']) => Promise<void>
   onRemoveRow: (rowId: string) => void
 }) {
+  const [settingDefault, setSettingDefault] = useState(false)
+  const [defaultMessage, setDefaultMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null)
+
+  async function handleSetDefault() {
+    const confirmed = window.confirm(
+      'Use the saved shifts for this week as the default rota? Any week you have not edited will show these shifts.',
+    )
+    if (!confirmed) return
+    setSettingDefault(true)
+    setDefaultMessage(null)
+    try {
+      await Promise.all(rows.map((row) => onSaveRow(row.id, withWeekAsDefault(row.shifts, week.dates))))
+      setDefaultMessage({ kind: 'info', text: 'Default rota updated.' })
+    } catch (err) {
+      setDefaultMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Could not set the default rota.' })
+    } finally {
+      setSettingDefault(false)
+    }
+  }
+
   return (
     <div className="timetable-week-block">
-      <h3 className="detail-summary-heading">{formatWeekRange(week.weekStart, week.weekEnd)}</h3>
+      <div className="timetable-week-head">
+        <h3 className="detail-summary-heading">{formatWeekRange(week.weekStart, week.weekEnd)}</h3>
+        {rows.length > 0 && (
+          <button type="button" className="btn-outline" onClick={handleSetDefault} disabled={settingDefault}>
+            {settingDefault ? 'Saving…' : 'Set as default rota'}
+          </button>
+        )}
+      </div>
+      {defaultMessage && <p className={`message message-${defaultMessage.kind}`}>{defaultMessage.text}</p>}
       <div className="table-wrapper">
         <table className="detail-table">
           <thead>
@@ -233,7 +261,7 @@ function ClientTimetableSection({
   week1: TimetableWeek
   week2: TimetableWeek
   onAdd: (clientId: string, workerId: string) => Promise<void>
-  onSaveRow: (rowId: string, shifts: Record<string, DayShift>) => Promise<void>
+  onSaveRow: (rowId: string, shifts: TimetableShift['shifts']) => Promise<void>
   onRemoveRow: (rowId: string) => void
 }) {
   const [addWorkerId, setAddWorkerId] = useState('')
@@ -320,7 +348,7 @@ export function WorkTimetableTab({ workers, clients }: { workers: Profile[]; cli
     setRows((previous) => [...previous, created])
   }
 
-  async function handleSaveRow(rowId: string, shifts: Record<string, DayShift>) {
+  async function handleSaveRow(rowId: string, shifts: TimetableShift['shifts']) {
     const updated = await updateTimetableShift(rowId, shifts)
     setRows((previous) => previous.map((row) => (row.id === rowId ? updated : row)))
   }

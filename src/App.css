@@ -1012,6 +1012,18 @@ a:focus-visible {
   cursor: pointer;
 }
 
+.timetable-week-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.timetable-week-head .detail-summary-heading {
+  flex: 1 1 auto;
+}
+
 .timetable-day-cell {
   display: flex;
   flex-direction: column;

@@ -6,7 +6,6 @@ import type {
   ClientInvoice,
   CustomerOrder,
   CustomOrderType,
-  DayShift,
   DevRequest,
   InvoiceFrequency,
   OwnerSubmission,
@@ -819,7 +818,7 @@ export async function addTimetableShift(input: { clientId: string; workerId: str
   return data as TimetableShift
 }
 
-export async function updateTimetableShift(shiftId: string, shifts: Record<string, DayShift>): Promise<TimetableShift> {
+export async function updateTimetableShift(shiftId: string, shifts: TimetableShift['shifts']): Promise<TimetableShift> {
   const client = requireClient()
   const { data, error } = await client
     .from('buster_timetable_shifts')

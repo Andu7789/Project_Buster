@@ -172,9 +172,11 @@ export function ServiceInvoicesTab() {
     try {
       const dateIssued = toISODate(new Date())
       const invoiceNumber = target.record.next_invoice_number
+      // Clients carry a separate real/legal name for invoices; fall back to the display name.
+      const billToName = (target.kind === 'client' && target.record.real_name?.trim()) || billTo
       const invoice = await createServiceInvoice({
         invoiceNumber,
-        billTo,
+        billTo: billToName,
         billToClientId: target.kind === 'client' ? target.record.id : null,
         billToServiceClientId: target.kind === 'serviceClient' ? target.record.id : null,
         dateIssued,

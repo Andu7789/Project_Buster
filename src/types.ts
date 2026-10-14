@@ -42,7 +42,7 @@ export interface PendingContractor {
   status: 'not_submitted' | 'awaiting_confirmation'
 }
 
-export type PaymentMethodType = 'bank' | 'wise' | 'paypal'
+export type PaymentMethodType = 'bank' | 'wise' | 'paypal' | 'revolut'
 
 export interface Client {
   id: string
@@ -75,7 +75,7 @@ export interface ServiceClient {
   created_at: string
 }
 
-/** The owner's own payout details for a method (bank/WISE/PayPal) - a fixed set of 3 rows, owner-only. */
+/** The owner's own payout details for a method (bank/WISE/PayPal/Revolut) - a fixed set of 4 rows, owner-only. */
 export interface PaymentMethod {
   id: string
   method: PaymentMethodType
@@ -130,6 +130,11 @@ export interface CustomerOrder {
   added_to_waiting_list: boolean | null
   created_at: string
   updated_at: string
+}
+
+/** A CustomerOrder joined to the customs sale entry it belongs to - what the owner's Customer Orders tab lists. */
+export interface CustomerOrderWithEntry extends CustomerOrder {
+  sale_entry: Pick<SaleEntry, 'entry_date' | 'client_id' | 'buyer_username' | 'gross'> | null
 }
 
 export interface DayShift {

@@ -5,6 +5,7 @@ import type {
   Client,
   ClientInvoice,
   CustomerOrder,
+  CustomerOrderWithEntry,
   CustomOrderType,
   DevRequest,
   InvoiceFrequency,
@@ -756,6 +757,17 @@ export async function listCustomerOrdersForWorker(workerId: string): Promise<Cus
   return (data ?? []) as CustomerOrder[]
 }
 
+/** Every worker's customer orders with their sale entry attached, newest first - owner-only (RLS lets owners read all). */
+export async function listAllCustomerOrders(): Promise<CustomerOrderWithEntry[]> {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('buster_customer_orders')
+    .select('*, sale_entry:buster_sale_entries(entry_date, client_id, buyer_username, gross)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as unknown as CustomerOrderWithEntry[]
+}
+
 /** Creates or updates the one customer-order row for a customs sale entry (unique on sale_entry_id). */
 export async function upsertCustomerOrder(input: {
   saleEntryId: string
@@ -952,6 +964,42 @@ export async function listOwnerSubmissionsForRange(startDate: string, endDate: s
 
   if (error) throw error
   return (data ?? []) as OwnerSubmission[]
+}
+
+/** Every owner submission ever entered, paged past the API's row cap. */
+export async function listAllOwnerSubmissions(): Promise<OwnerSubmission[]> {
+  const client = requireClient()
+  const pageSize = 1000
+  const all: OwnerSubmission[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from('buster_owner_submissions')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    all.push(...((data ?? []) as OwnerSubmission[]))
+    if (!data || data.length < pageSize) break
+  }
+  return all
+}
+
+/** Every sale entry ever logged, paged past the API's row cap. */
+export async function listAllSaleEntries(): Promise<SaleEntry[]> {
+  const client = requireClient()
+  const pageSize = 1000
+  const all: SaleEntry[] = []
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from('buster_sale_entries')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    all.push(...((data ?? []) as SaleEntry[]))
+    if (!data || data.length < pageSize) break
+  }
+  return all
 }
 
 export async function addOwnerSubmission(input: {

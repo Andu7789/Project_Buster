@@ -231,6 +231,17 @@ export function chattingManagementSplitByClient(entries: SaleEntry[], clients: C
   })
 }
 
+/**
+ * Company earnings across any set of entries: the sum of the "Company total" figures on the Alex & Paige
+ * Earnings tab, i.e. chatting management (owner cut on sale entries plus direct sexting submissions)
+ * plus PM sales (subscriptions, tips, livestreams).
+ */
+export function companyEarningsTotal(entries: SaleEntry[], ownerSubmissions: OwnerSubmission[], clients: Client[]): number {
+  const chattingFromEntries = ownerCutByClient(entries, clients).reduce((sum, row) => sum + row.total, 0)
+  const fromOwnerSubmissions = ownerSubmissions.reduce((sum, entry) => sum + entry.owner_cut, 0)
+  return chattingFromEntries + fromOwnerSubmissions
+}
+
 export interface PmSalesSextingRow {
   clientName: string
   paige: number

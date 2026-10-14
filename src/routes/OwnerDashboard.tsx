@@ -17,6 +17,8 @@ import {
   deleteProfile,
   deleteSubmission,
   listAllSubmissions,
+  listAllOwnerSubmissions,
+  listAllSaleEntries,
   listAllTrainingProgress,
   listAllWorkerPaymentDetails,
   listClientInvoices,
@@ -57,6 +59,7 @@ import { formatCurrency, getCurrentWeekRange, getNextWeekRange, getPreviousWeekR
 import {
   calcOwnerCut,
   clientPayoutTotal,
+  companyEarningsTotal,
   earningsByClient,
   invoiceNumberFor,
   ownerCutPercentForSection,
@@ -105,6 +108,7 @@ import { ServiceInvoicesTab } from './OwnerDashboard/ServiceInvoicesTab'
 import { CalendarTab } from './OwnerDashboard/CalendarTab'
 import { WorkTimetableTab } from './OwnerDashboard/WorkTimetableTab'
 import { RequestsTab } from './OwnerDashboard/RequestsTab'
+import { CustomerOrdersTab } from './OwnerDashboard/CustomerOrdersTab'
 import { AccountTab } from './OwnerDashboard/AccountTab'
 
 export function OwnerDashboard({ profile }: { profile: Profile }) {
@@ -292,15 +296,36 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
   const pendingInvites = workers.filter((worker) => worker.status === 'pending').length
   const pendingSubmissions = submissions.filter((submission) => !submission.dealt_with).length
 
-  const totalThisMonth = useMemo(() => {
-    const now = new Date()
-    return submissions
-      .filter((submission) => {
-        const start = new Date(submission.week_start)
-        return start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth()
+  const [allSaleEntries, setAllSaleEntries] = useState<SaleEntry[]>([])
+  const [allOwnerSubmissions, setAllOwnerSubmissions] = useState<OwnerSubmission[]>([])
+
+  // Reloads when PM Sales entries change so the company earnings cards stay current.
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([listAllSaleEntries(), listAllOwnerSubmissions()])
+      .then(([saleEntryData, ownerSubmissionData]) => {
+        if (cancelled) return
+        setAllSaleEntries(saleEntryData)
+        setAllOwnerSubmissions(ownerSubmissionData)
       })
-      .reduce((sum, submission) => sum + submission.amount, 0)
-  }, [submissions])
+      .catch(() => {
+        // The cards just keep their last value if this fails.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ownerSubmissions])
+
+  const earningsThisMonth = (() => {
+    const now = new Date()
+    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return companyEarningsTotal(
+      allSaleEntries.filter((entry) => entry.entry_date.startsWith(prefix)),
+      allOwnerSubmissions.filter((entry) => entry.entry_date.startsWith(prefix)),
+      clients,
+    )
+  })()
+  const totalEarnings = companyEarningsTotal(allSaleEntries, allOwnerSubmissions, clients)
 
   const trendData = useMemo(() => {
     const totals = new Map<string, number>()
@@ -1167,7 +1192,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
               hint="awaiting invoice"
               tone={pendingSubmissions > 0 ? 'danger' : 'default'}
             />
-            <StatCard label="Paid out this month" value={formatCurrency(totalThisMonth)} />
+            <StatCard label="Total earnings this month" value={formatCurrency(earningsThisMonth)} />
+            <StatCard label="Total earnings" value={formatCurrency(totalEarnings)} hint="all-time" />
             <StatCard label="Team size" value={String(workers.length)} hint="all-time" />
           </section>
 
@@ -1365,6 +1391,8 @@ export function OwnerDashboard({ profile }: { profile: Profile }) {
           {activeTab === 'calendar' && <CalendarTab workers={workers} clients={clients} saleTypes={saleTypes} />}
 
           {activeTab === 'timetable' && <WorkTimetableTab workers={workers} clients={clients} />}
+
+          {activeTab === 'customerOrders' && <CustomerOrdersTab workers={workers} clients={clients} />}
 
           {activeTab === 'requests' && <RequestsTab profile={profile} />}
         </>

@@ -89,7 +89,7 @@ alter table buster_clients add column if not exists real_name text;
 alter table buster_clients add column if not exists payment_method text;
 alter table buster_clients drop constraint if exists buster_clients_payment_method_check;
 alter table buster_clients add constraint buster_clients_payment_method_check
-  check (payment_method is null or payment_method in ('bank', 'wise', 'paypal'));
+  check (payment_method is null or payment_method in ('bank', 'wise', 'paypal', 'revolut'));
 
 -- Migration: per-client invoice numbering. Holds the number to print on this
 -- client's *next* generated invoice - the owner sets each client's starting
@@ -133,23 +133,34 @@ alter table buster_clients alter column color set not null;
 -- skipped for a client with none set.
 alter table buster_clients add column if not exists telegram_chat_id text;
 
--- The owner's own payout details for each method - a fixed set of 3 rows
+-- The owner's own payout details for each method - a fixed set of 4 rows
 -- (seeded below, never inserted/deleted from the app, only updated in
 -- place). Owner-only end to end (no "anyone signed in reads" policy like
 -- buster_clients/buster_sale_types below) since this is banking/PayPal info,
 -- not something every signed-in worker needs to read.
 create table if not exists buster_payment_methods (
   id uuid primary key default gen_random_uuid(),
-  method text not null unique check (method in ('bank', 'wise', 'paypal')),
+  method text not null unique check (method in ('bank', 'wise', 'paypal', 'revolut')),
   details jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
-insert into buster_payment_methods (method) values ('bank'), ('wise'), ('paypal')
+insert into buster_payment_methods (method) values ('bank'), ('wise'), ('paypal'), ('revolut')
 on conflict (method) do nothing;
 
+-- Migration: add Revolut as a payment method. Widens the method check on every
+-- table that stores one (the create-table checks above only apply to fresh
+-- installs) and seeds the owner's Revolut row for existing databases.
+alter table buster_payment_methods drop constraint if exists buster_payment_methods_method_check;
+alter table buster_payment_methods add constraint buster_payment_methods_method_check
+  check (method in ('bank', 'wise', 'paypal', 'revolut'));
+alter table buster_worker_payment_details drop constraint if exists buster_worker_payment_details_method_check;
+alter table buster_worker_payment_details add constraint buster_worker_payment_details_method_check
+  check (method in ('bank', 'wise', 'paypal', 'revolut'));
+insert into buster_payment_methods (method) values ('revolut') on conflict (method) do nothing;
+
 -- A worker's own payout details - where the owner pays *them*, as opposed to
--- buster_payment_methods above (the owner's own fixed 3 rows, where clients
+-- buster_payment_methods above (the owner's own fixed 4 rows, where clients
 -- pay the owner). One row per worker, worker-managed via the "Payment
 -- Details" tab on their own portal - unlike buster_payment_methods' fixed
 -- set of 3 method rows, a worker picks a single method and only that
@@ -157,7 +168,7 @@ on conflict (method) do nothing;
 create table if not exists buster_worker_payment_details (
   id uuid primary key default gen_random_uuid(),
   worker_id uuid not null unique references buster_profiles(id),
-  method text not null check (method in ('bank', 'wise', 'paypal')),
+  method text not null check (method in ('bank', 'wise', 'paypal', 'revolut')),
   details jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
@@ -431,11 +442,15 @@ insert into buster_service_invoice_settings (id) values (true) on conflict (id) 
 create table if not exists buster_service_clients (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
-  payment_method text check (payment_method is null or payment_method in ('bank', 'wise', 'paypal')),
+  payment_method text check (payment_method is null or payment_method in ('bank', 'wise', 'paypal', 'revolut')),
   invoice_frequency text check (invoice_frequency is null or invoice_frequency in ('weekly', 'biweekly', 'monthly')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table buster_service_clients drop constraint if exists buster_service_clients_payment_method_check;
+alter table buster_service_clients add constraint buster_service_clients_payment_method_check
+  check (payment_method is null or payment_method in ('bank', 'wise', 'paypal', 'revolut'));
 
 -- Migration: per-service-client invoice numbering (mirrors buster_clients.next_invoice_number)
 -- so a client's GG Swaps/SFS invoices share one running sequence with their PM invoice when
